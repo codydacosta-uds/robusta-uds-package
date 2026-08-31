@@ -1,9 +1,24 @@
-# UDS Packages
+# UDS Robusta Package
 
-UDS packages maintained for local and air-gapped deployment.
+Packages the official Robusta Helm chart `0.48.0` from `https://robusta-charts.storage.googleapis.com`.
 
-## Packages
+Defaults:
 
-- [Robusta](packages/robusta/README.md) — Robusta Helm chart `0.48.0` with the Mattermost relay enabled by default.
+- Namespace: `robusta`
+- Environment: `dev`
+- Mattermost relay enabled
+- Test alert scope: `robusta-test`
+- No real credentials
 
-Built Zarf packages and UDS bundles are intentionally not committed. Build them locally from each package directory.
+The Mattermost webhook is intentionally not packaged. Before deployment, create it externally:
+
+```bash
+kubectl -n robusta create secret generic robusta-mattermost-webhook \
+  --from-literal=url='https://mattermost.example/hooks/REPLACE_ME'
+```
+
+The relay reads key `url` from that Secret. The package does not create or populate the Secret.
+
+The `test` flavor deploys a disposable in-cluster Mattermost-compatible receiver and is used by CI to verify the complete alert delivery path. The receiver and test Secret are never included in the default `upstream` flavor.
+
+Source assets were copied from `toolbox/robusta`; that source directory is not modified.

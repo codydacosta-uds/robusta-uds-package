@@ -1,3 +1,5 @@
+# Copyright 2025 Defense Unicorns
+# SPDX-License-Identifier: AGPL-3.0-or-later OR LicenseRef-Defense-Unicorns-Commercial
 # Base Robusta values. Copy and supply environment-specific values separately.
 clusterName: dev
 
@@ -254,7 +256,6 @@ runner:
 # #    actions: *alert_actions
 # #    sinks: *sinks
 
-
 x-alert-actions: &alert_actions
   - resource_babysitter: {}
   - customise_finding:
@@ -283,5 +284,25 @@ customPlaybooks:
           change_filters:
             <<: *change_filter
             include: [spec]
+    actions: *alert_actions
+    sinks: *relay_sink
+
+  - name: GrafanaConfigMapChanges
+    triggers:
+      - on_configmap_update:
+          namespace_prefix: grafana
+          change_filters:
+            <<: *change_filter
+            include: [data, binaryData]
+    actions: *alert_actions
+    sinks: *relay_sink
+
+  - name: RobustaTestConfigMapChanges
+    triggers:
+      - on_configmap_update:
+          namespace_prefix: robusta-test
+          change_filters:
+            <<: *change_filter
+            include: [data, binaryData]
     actions: *alert_actions
     sinks: *relay_sink
