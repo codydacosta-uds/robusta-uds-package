@@ -12,12 +12,12 @@ The package uses the official Robusta chart version `0.48.0`.
 ## Defaults
 
 - Robusta namespace: `robusta`
-- Alert/test namespace: `robusta-test`
+- Default alert namespace: `zarf`
 - Environment: `dev`
 - Mattermost relay: enabled by default
 - Prometheus stack and HolmesGPT: disabled
 
-The package observes cluster-wide resources but emits findings only for the reviewed `robusta-test` ConfigMap playbook by default. Expand the allow-list declaratively in `values/upstream-values.yaml`.
+The package observes cluster-wide resources but emits findings only for the reviewed `zarf` ConfigMap and Deployment playbooks by default. Expand the allow-list declaratively in `values/upstream-values.yaml`.
 
 ## Mattermost webhook Secret
 

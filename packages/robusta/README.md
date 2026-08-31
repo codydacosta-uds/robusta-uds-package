@@ -7,7 +7,7 @@ Defaults:
 - Namespace: `robusta`
 - Environment: `dev`
 - Mattermost relay enabled
-- Test alert scope: `robusta-test`
+- Default alert scope: the `zarf` namespace for ConfigMaps and Deployments
 - No real credentials
 
 The Mattermost webhook is intentionally not packaged. Before deployment, create it externally:
@@ -33,7 +33,7 @@ The checked-in `dev` values are safe placeholders only and are not production cr
 Before deployment, provide:
 
 - A UDS Core cluster with the base layer and outbound HTTPS access to the Mattermost host.
-- Approval of the default alert scope (`robusta-test`) or a reviewed replacement in `customPlaybooks`.
+- Approval of the default `zarf` namespace alert scope or a reviewed replacement in `customPlaybooks`.
 
 Build and deploy from this directory:
 

@@ -266,22 +266,22 @@ x-change-filter: &change_filter
   ignore: [metadata.generation, metadata.resourceVersion, metadata.managedFields, status]
 
 customPlaybooks:
-  - name: GrafanaConfigMapChanges
+  - name: ZarfConfigMapChanges
     triggers:
       - on_configmap_update:
-          namespace_prefix: grafana
+          namespace_prefix: zarf
           change_filters:
             <<: *change_filter
             include: [data, binaryData]
     actions: *alert_actions
     sinks: *relay_sink
 
-  - name: RobustaTestConfigMapChanges
+  - name: ZarfDeploymentManifestChanges
     triggers:
-      - on_configmap_update:
-          namespace_prefix: robusta-test
+      - on_deployment_update:
+          namespace_prefix: zarf
           change_filters:
             <<: *change_filter
-            include: [data, binaryData]
+            include: [spec]
     actions: *alert_actions
     sinks: *relay_sink
