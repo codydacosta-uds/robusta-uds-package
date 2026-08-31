@@ -8,6 +8,10 @@ metadata:
   version: dev
 
 packages:
+  # Deploy the external test Secret and receiver before the production package.
+  - name: robusta-test
+    path: ../tests
+    ref: dev
   - name: robusta
     path: ../
-    ref: dev-test
+    ref: dev

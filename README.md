@@ -1,6 +1,6 @@
 # UDS Robusta Package
 
-Packages the official Robusta Helm chart `0.48.0` with profile-driven native Kubernetes resource alerts and a uniform Mattermost attachment relay.
+This package deploys Robusta on UDS Core with profile-driven Kubernetes resource alerts and uniform Mattermost notifications.
 
 Users select exact namespaces, supported resource types, and named Mattermost sinks. The package owns the Robusta playbooks and webhook payload formatting; users do not need to write either.
 
@@ -123,4 +123,4 @@ See [Alert profile configuration](docs/configuration.md) for:
 - Package-variable reference
 - Troubleshooting and validation behavior
 
-The `test` flavor uses a disposable in-cluster Mattermost-compatible receiver to verify the complete ConfigMap alert path. No real credentials are included in either flavor.
+The isolated test-support package under [`tests/`](tests/) provides a disposable in-cluster Mattermost-compatible receiver for CI. The root `zarf.yaml` contains only the releasable Robusta package.

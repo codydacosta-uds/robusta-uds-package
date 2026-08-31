@@ -18,19 +18,19 @@ tasks:
           options: "--skip-sbom"
 
   - name: create-test-package
-    description: Create the Robusta test-flavor Zarf package
+    description: Create the isolated Robusta test-support package
     actions:
-      - cmd: uds zarf package create . --flavor test --skip-sbom --confirm
+      - cmd: cd tests && uds zarf package create . --architecture="${UDS_ARCH}" --skip-sbom --confirm
 
   - name: create-test-bundle
-    description: Create the Robusta test-flavor UDS bundle
+    description: Create the Robusta test bundle
     actions:
-      - cmd: uds create bundle/ --confirm
+      - task: create:test-bundle
 
-  # CI entry point used by uds-common's callable-test workflow.
   - name: test-package
-    description: Test the Robusta test flavor on a fresh UDS Core cluster
+    description: Test the upstream Robusta package on a fresh UDS Core cluster
     actions:
+      - task: create-dev-package
       - task: create-test-package
       - task: setup:k3d-test-cluster
         with:
@@ -40,8 +40,15 @@ tasks:
       - task: deploy:test-bundle
       - task: test:all
 
-  - name: dev
-    description: Build the Robusta test package and development bundle
+  # Entry point used by uds-common's callable-test workflow for type=install.
+  - name: test-install
+    description: Install and test the upstream Robusta package
     actions:
+      - task: test-package
+
+  - name: dev
+    description: Build the upstream package, test support package, and test bundle
+    actions:
+      - task: create-dev-package
       - task: create-test-package
       - task: create-test-bundle

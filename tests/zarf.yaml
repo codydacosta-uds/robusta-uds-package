@@ -1,0 +1,19 @@
+# Copyright 2026 Defense Unicorns
+# SPDX-License-Identifier: AGPL-3.0-or-later OR LicenseRef-Defense-Unicorns-Commercial
+
+# yaml-language-server: $schema=https://raw.githubusercontent.com/defenseunicorns/zarf/main/zarf.schema.json
+kind: ZarfPackageConfig
+metadata:
+  name: robusta-test
+  description: "Test-only Mattermost-compatible receiver for the Robusta package"
+  version: "dev"
+
+components:
+  - name: mattermost-test-mock
+    required: true
+    charts:
+      - name: uds-robusta-test-mock
+        namespace: robusta
+        localPath: mattermost-mock-chart
+    images:
+      - docker.io/library/python:3.13.2-alpine

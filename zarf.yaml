@@ -25,8 +25,8 @@ variables:
     default: ""
   - name: ALERT_ENVIRONMENT
     default: "production"
-  # Pass a compact JSON object. See docs/configuration.md for the readable YAML
-  # form and the yq command used to provide it at deployment time.
+  # Pass JSON as compact CLI input or a multi-line uds-config string.
+  # See docs/configuration.md for both forms.
   - name: ALERT_CONFIG
     default: '{"defaultSinks":["mattermost-default"],"sinks":{"mattermost-default":{"secretKey":"url"}},"alertProfiles":[{"name":"zarf-namespaced-resources","enabled":true,"namespaces":["zarf"],"resources":["ConfigMap","DaemonSet","Deployment","HorizontalPodAutoscaler","Ingress","Job","Pod","ReplicaSet","Service","ServiceAccount","StatefulSet"]}],"clusterAlertProfiles":[{"name":"cluster-scoped-resources","enabled":true,"resources":["ClusterRole","ClusterRoleBinding","Namespace","Node","PersistentVolume"]}]}'
   - name: WATCH_SECRETS
@@ -45,35 +45,6 @@ components:
       - name: robusta
         valuesFiles:
           - values/upstream-values.yaml
-    images:
-      - docker.io/robustadev/robusta-runner:0.48.0
-      - docker.io/robustadev/kubewatch:v2.16.1
-      - docker.io/library/python:3.13.2-alpine
-
-  - name: mattermost-test-mock
-    required: true
-    description: "Test-only Mattermost webhook receiver"
-    only:
-      flavor: test
-    charts:
-      - name: uds-robusta-test-mock
-        namespace: robusta
-        localPath: tests/mattermost-mock-chart
-    images:
-      - docker.io/library/python:3.13.2-alpine
-
-  - name: robusta
-    required: true
-    description: "Deploy Robusta with the Mattermost test receiver"
-    import:
-      path: common
-    only:
-      flavor: test
-    charts:
-      - name: robusta
-        valuesFiles:
-          - values/upstream-values.yaml
-          - tests/test-values.yaml
     images:
       - docker.io/robustadev/robusta-runner:0.48.0
       - docker.io/robustadev/kubewatch:v2.16.1

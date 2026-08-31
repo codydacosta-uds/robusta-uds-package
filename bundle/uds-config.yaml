@@ -5,6 +5,8 @@
 variables:
   robusta:
     CLUSTER_NAME: "robusta-test"
+    ROBUSTA_ACCOUNT_ID: "test"
+    ROBUSTA_SIGNING_KEY: "test-signing-key-no-credentials"
     ALERT_ENVIRONMENT: "test"
     WATCH_SECRETS: "false"
     ALERT_CONFIG: |-

@@ -190,6 +190,6 @@ Robusta/Kubewatch 0.48.0 emits Secret metadata and type changes, but intentional
 
 The generated native-resource playbooks are package internals. Advanced maintainers may add separate Robusta playbooks, but custom playbooks are not required for profile-based native resource alerting.
 
-## Test flavor
+## Test support package
 
-The `test` flavor includes an in-cluster Mattermost-compatible receiver and a test-only webhook Secret. CI deploys the production playbook set, changes a ConfigMap in the default `zarf` profile, and verifies a Mattermost attachment titled `ConfigMap changed`.
+The isolated package in `tests/zarf.yaml` includes an in-cluster Mattermost-compatible receiver and a test-only webhook Secret. CI deploys it alongside the normal upstream Robusta package, changes a ConfigMap in the default `zarf` profile, and verifies a Mattermost attachment titled `ConfigMap changed`.

@@ -42,7 +42,7 @@ fi
 "${kubectl[@]}" get deployment robusta-mattermost-relay -n robusta >/dev/null
 "${kubectl[@]}" wait --for=condition=Available deployment/robusta-mattermost-mock -n robusta --timeout=180s
 
-# The production playbook set and safe defaults must also be present in the test flavor.
+# The production playbook set and safe defaults must be present in the upstream package.
 profiles=$("${kubectl[@]}" get configmap robusta-mattermost-relay -n robusta -o jsonpath='{.data.profiles\.json}')
 grep -q 'zarf-namespaced-resources' <<<"$profiles"
 grep -q 'cluster-scoped-resources' <<<"$profiles"
