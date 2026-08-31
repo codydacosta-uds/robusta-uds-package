@@ -23,6 +23,10 @@ spec:
       # The Mattermost relay delivers to an externally hosted webhook.
       - direction: Egress
         remoteGenerated: Anywhere
+        selector:
+          app.kubernetes.io/name: robusta-mattermost-relay
+        port: 443
+        description: "Mattermost webhook delivery"
 
       # Custom rules for unanticipated scenarios
       {{- with .Values.additionalNetworkAllow }}

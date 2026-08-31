@@ -21,7 +21,3 @@ components:
         version: 0.48.0
         valuesFiles:
           - ../values/common-values.yaml
-    manifests:
-      - name: mattermost-relay
-        files:
-          - ../manifests/mattermost-relay.yaml
