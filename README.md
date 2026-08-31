@@ -5,7 +5,7 @@ Packages the official Robusta Helm chart `0.48.0` from `https://robusta-charts.s
 Defaults:
 
 - Namespace: `robusta`
-- Environment: `dev`
+- Alert environment: `production` (configurable with `ALERT_ENVIRONMENT`)
 - Mattermost relay enabled
 - Test alert scope: `robusta-test`
 - No real credentials
