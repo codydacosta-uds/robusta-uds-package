@@ -1,8 +1,11 @@
 # yaml-language-server: $schema=https://raw.githubusercontent.com/defenseunicorns/uds-cli/refs/heads/main/tasks.schema.json
 includes:
-  - create: https://raw.githubusercontent.com/defenseunicorns/uds-common/v1.28.0/tasks/create.yaml
-  - lint: https://raw.githubusercontent.com/defenseunicorns/uds-common/v1.28.0/tasks/lint.yaml
-  - setup: https://raw.githubusercontent.com/defenseunicorns/uds-common/v1.28.0/tasks/setup.yaml
+  - test: ./tasks/test.yaml
+  - create: https://raw.githubusercontent.com/defenseunicorns/uds-common/v1.27.2/tasks/create.yaml
+  - lint: https://raw.githubusercontent.com/defenseunicorns/uds-common/v1.27.2/tasks/lint.yaml
+  - setup: https://raw.githubusercontent.com/defenseunicorns/uds-common/v1.27.2/tasks/setup.yaml
+  - actions: https://raw.githubusercontent.com/defenseunicorns/uds-common/v1.27.2/tasks/actions.yaml
+  - deploy: https://raw.githubusercontent.com/defenseunicorns/uds-common/v1.27.2/tasks/deploy.yaml
 
 tasks:
   - name: create-dev-package
@@ -21,6 +24,19 @@ tasks:
     description: Create the Robusta test-flavor UDS bundle
     actions:
       - cmd: uds create bundle/ --confirm
+
+  # CI entry point used by uds-common's callable-test workflow.
+  - name: test-package
+    description: Test the Robusta test flavor on a fresh UDS Core cluster
+    actions:
+      - task: create-test-package
+      - task: setup:k3d-test-cluster
+        with:
+          options: --set K3D_EXTRA_ARGS="-a=2"
+          use_checkpoint: "false"
+      - task: create-test-bundle
+      - task: deploy:test-bundle
+      - task: test:all
 
   - name: dev
     description: Build the Robusta test package and development bundle
