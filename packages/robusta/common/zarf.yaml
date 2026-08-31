@@ -1,0 +1,27 @@
+# Copyright 2024 Defense Unicorns
+# SPDX-License-Identifier: AGPL-3.0-or-later OR LicenseRef-Defense-Unicorns-Commercial
+
+# yaml-language-server: $schema=https://raw.githubusercontent.com/defenseunicorns/zarf/main/zarf.schema.json
+kind: ZarfPackageConfig
+metadata:
+  name: robusta-common
+  description: "UDS Robusta Common Package"
+
+components:
+  - name: robusta
+    required: true
+    charts:
+      - name: uds-robusta-config
+        namespace: robusta
+        version: 0.1.0
+        localPath: ../chart
+      - name: robusta
+        namespace: robusta
+        url: https://robusta-charts.storage.googleapis.com
+        version: 0.48.0
+        valuesFiles:
+          - ../values/common-values.yaml
+    manifests:
+      - name: mattermost-relay
+        files:
+          - ../manifests/mattermost-relay.yaml

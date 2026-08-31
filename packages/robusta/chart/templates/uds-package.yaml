@@ -1,0 +1,30 @@
+# Copyright 2024 Defense Unicorns
+# SPDX-License-Identifier: AGPL-3.0-or-later OR LicenseRef-Defense-Unicorns-Commercial
+
+apiVersion: uds.dev/v1alpha1
+kind: Package
+metadata:
+  name: robusta
+  namespace: {{ .Release.Namespace }}
+# Full Package CR spec reference:
+# https://docs.defenseunicorns.com/core/reference/operator--crds/packages-v1alpha1-cr/
+spec:
+  # Robusta is an alerting backend; it has no user-facing HTTP service.
+  network:
+    serviceMesh:
+      mode: ambient
+    allow:
+      - direction: Ingress
+        remoteGenerated: IntraNamespace
+
+      - direction: Egress
+        remoteGenerated: IntraNamespace
+
+      # The Mattermost relay delivers to an externally hosted webhook.
+      - direction: Egress
+        remoteGenerated: Anywhere
+
+      # Custom rules for unanticipated scenarios
+      {{- with .Values.additionalNetworkAllow }}
+      {{ toYaml . | nindent 6 }}
+      {{- end }}

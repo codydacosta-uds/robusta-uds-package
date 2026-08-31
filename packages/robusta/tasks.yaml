@@ -1,0 +1,24 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/defenseunicorns/uds-cli/refs/heads/main/tasks.schema.json
+includes:
+  - create: https://raw.githubusercontent.com/defenseunicorns/uds-common/v1.28.0/tasks/create.yaml
+  - lint: https://raw.githubusercontent.com/defenseunicorns/uds-common/v1.28.0/tasks/lint.yaml
+  - setup: https://raw.githubusercontent.com/defenseunicorns/uds-common/v1.28.0/tasks/setup.yaml
+
+tasks:
+  - name: create-dev-package
+    description: Create the Robusta Zarf package
+    actions:
+      - task: create:package
+        with:
+          options: "--skip-sbom"
+
+  - name: create-test-bundle
+    description: Create the Robusta development UDS bundle
+    actions:
+      - cmd: uds create bundle/ --confirm
+
+  - name: dev
+    description: Build the Robusta package and development bundle
+    actions:
+      - task: create-dev-package
+      - task: create-test-bundle

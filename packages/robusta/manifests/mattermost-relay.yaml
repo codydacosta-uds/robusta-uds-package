@@ -1,0 +1,229 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: robusta-mattermost-relay
+  namespace: robusta
+  labels:
+    app.kubernetes.io/name: robusta-mattermost-relay
+data:
+  relay.py: |
+    import difflib
+    import json
+    import re
+    import os
+    from http.server import BaseHTTPRequestHandler, HTTPServer
+    from urllib.request import Request, urlopen
+
+    WEBHOOK_URL = os.environ["MATTERMOST_WEBHOOK_URL"]
+    ENVIRONMENT = os.environ["ALERT_ENVIRONMENT"]
+
+    def value_diff(before, after):
+        # Omit unified-diff file headers; retain changed lines and three lines of context.
+        lines = difflib.unified_diff(before.splitlines(), after.splitlines(), n=3, lineterm="")
+        rendered = "\n".join(line for line in lines if not line.startswith(("--- ", "+++ ")))
+        rendered = rendered.replace("```", chr(39) * 3)
+        return rendered[:3000] + ("\n... diff truncated" if len(rendered) > 3000 else "")
+
+    KIND_NAMES = {
+        "clusterrole": "ClusterRole", "clusterrolebinding": "ClusterRoleBinding",
+        "configmap": "ConfigMap", "daemonset": "DaemonSet", "deployment": "Deployment",
+        "event": "Event", "horizontalpodautoscaler": "HorizontalPodAutoscaler",
+        "ingress": "Ingress", "job": "Job", "namespace": "Namespace", "node": "Node",
+        "persistentvolume": "PersistentVolume", "persistentvolumeclaim": "PersistentVolumeClaim",
+        "pod": "Pod", "replicaset": "ReplicaSet", "secret": "Secret", "service": "Service",
+        "serviceaccount": "ServiceAccount", "statefulset": "StatefulSet",
+    }
+    WORKLOADS = {"Deployment", "StatefulSet", "DaemonSet", "Pod", "ReplicaSet", "Job"}
+
+    def display_kind(value):
+        compact = re.sub(r"[^a-z]", "", value.lower())
+        return KIND_NAMES.get(compact, value.replace("-", " ").title())
+
+    def parse_title(raw_title):
+        kind, separator, resource = raw_title.partition(" changed: ")
+        if separator:
+            namespace, _, name = resource.partition("/")
+            return display_kind(kind), namespace or "unknown", name or resource
+        native = re.match(r"^([^/]+)/([^/]+)/(.+?)(?:\.yaml)? updated$", raw_title, re.IGNORECASE)
+        if native:
+            kind, namespace, name = native.groups()
+            return display_kind(kind), namespace or "cluster-scoped", name
+        cluster_native = re.match(r"^([^/]+)/(.+?)(?:\.yaml)? updated$", raw_title, re.IGNORECASE)
+        if cluster_native:
+            kind, name = cluster_native.groups()
+            return display_kind(kind), "cluster-scoped", name
+        return "Kubernetes resource", "unknown", raw_title
+
+    def field_profile(kind, path):
+        lower = path.lower()
+        if kind == "ConfigMap" and lower.startswith(("data.", "binarydata.")):
+            return "Data key", path.split(".", 1)[1]
+        if kind == "Secret" and lower.startswith(("data.", "stringdata.")):
+            return "Secret data", path.split(".", 1)[1]
+        if kind in WORKLOADS:
+            if lower.endswith(".image") or ".image." in lower: return "Container image", path
+            if "replicas" in lower: return "Replica count", path
+            if ".env" in lower: return "Container environment", path
+            if ".resources" in lower: return "Container resources", path
+            if "volume" in lower: return "Volume", path
+            if "template" in lower: return "Pod template field", path
+            return "Workload field", path
+        if kind == "Service":
+            if "ports" in lower: return "Service port", path
+            if "selector" in lower: return "Selector", path
+            if lower.endswith("type"): return "Service type", path
+        if kind == "Ingress":
+            for token, label in (("host", "Host"), ("path", "Route path"), ("tls", "TLS configuration"), ("backend", "Backend")):
+                if token in lower: return label, path
+        if kind == "HorizontalPodAutoscaler":
+            for token, label in (("minreplicas", "Minimum replicas"), ("maxreplicas", "Maximum replicas"), ("metrics", "Scaling metric"), ("scaletargetref", "Scale target")):
+                if token in lower: return label, path
+        if kind in {"PersistentVolume", "PersistentVolumeClaim"}:
+            for token, label in (("storageclassname", "Storage class"), ("accessmodes", "Access mode"), ("capacity", "Capacity"), ("resources", "Storage request"), ("volume", "Volume source")):
+                if token in lower: return label, path
+        if kind in {"ClusterRole", "ClusterRoleBinding"}:
+            for token, label in (("roleref", "Role reference"), ("subjects", "Subject"), ("rules", "RBAC rule")):
+                if token in lower: return label, path
+        if kind == "Node":
+            for token, label in (("taints", "Taint"), ("unschedulable", "Scheduling"), ("labels", "Node label"), ("annotations", "Node annotation")):
+                if token in lower: return label, path
+        if kind == "ServiceAccount":
+            for token, label in (("imagepullsecrets", "Image pull secret"), ("automount", "Token automount"), ("secrets", "Service account secret")):
+                if token in lower: return label, path
+        if kind == "Event":
+            for token, label in (("reason", "Reason"), ("message", "Message"), ("count", "Count"), ("involvedobject", "Involved object"), ("type", "Event type")):
+                if token in lower: return label, path
+        if kind == "Namespace" and "labels" in lower: return "Namespace label", path
+        if kind == "Namespace" and "annotations" in lower: return "Namespace annotation", path
+        return "Field", path
+
+    def section_title(kind):
+        if kind == "ConfigMap": return "Configuration data changes"
+        if kind == "Secret": return "Secret metadata changes"
+        if kind in WORKLOADS: return "Workload manifest changes"
+        if kind in {"Service", "Ingress"}: return "Network configuration changes"
+        if kind == "HorizontalPodAutoscaler": return "Autoscaling changes"
+        if kind in {"PersistentVolume", "PersistentVolumeClaim"}: return "Storage configuration changes"
+        if kind in {"ClusterRole", "ClusterRoleBinding", "ServiceAccount"}: return "Access-control changes"
+        if kind == "Event": return "Event changes"
+        return "Manifest changes"
+
+    def render_alert(message):
+        lines = message.splitlines()
+        incoming_title = lines[0] if lines else "Kubernetes configuration changed"
+        kind, namespace, name = parse_title(incoming_title)
+        raw_title = f"{kind} changed: {namespace}/{name}"
+        pattern = re.compile(r"(?ms)^\s*\*([^*]+)\*:\s*(.*?)\s*==>\s*(.*?)(?=\n\s*\*[^*]+\*:\s*|\Z)")
+        changes = [(m.group(1).strip(), m.group(2).strip(), m.group(3).strip()) for m in pattern.finditer(message)]
+        rendered_changes = []
+        for path, before, after in changes:
+            label, shown_path = field_profile(kind, path)
+            if kind == "Secret" and path.lower().startswith(("data.", "stringdata.")):
+                rendered_changes.append(f"**{label}:** {shown_path}\n_Value changed (redacted)._" )
+            else:
+                rendered_changes.append(f"**{label}:** {shown_path}\n```diff\n{value_diff(before, after)}\n```")
+        if rendered_changes:
+            change_text = "\n\n".join(rendered_changes)
+            item = "change" if len(changes) == 1 else "changes"
+            summary = f"{len(changes)} manifest {item}"
+        else:
+            change_text, summary = "_Update detected; no field diff was available._", "Resource updated"
+        return {"attachments": [{
+            "fallback": raw_title, "color": "#f2c744", "title": f"⚠️ {raw_title}",
+            "text": (f"**Summary:** {summary}\n\n**{section_title(kind)}**\n\n{change_text[:9000]}\n\n_Actor and API request: EKS audit logs_"),
+            "fields": [
+                {"title": "Environment", "value": ENVIRONMENT, "short": True},
+                {"title": "Namespace", "value": namespace or "cluster-scoped", "short": True},
+                {"title": "Resource", "value": name, "short": True},
+                {"title": "Kind", "value": kind, "short": True},
+                {"title": "Severity", "value": "Warning", "short": True},
+            ], "footer": "Robusta",
+        }]}
+
+    class Relay(BaseHTTPRequestHandler):
+        def do_POST(self):
+            length = int(self.headers.get("Content-Length", "0"))
+            message = self.rfile.read(length).decode("utf-8", errors="replace").strip()
+            alert = render_alert(message)
+            request = Request(WEBHOOK_URL, data=json.dumps(alert).encode(), headers={"Content-Type": "application/json"})
+            try:
+                with urlopen(request, timeout=10) as response:
+                    if not 200 <= response.status < 300:
+                        raise RuntimeError(f"Mattermost returned {response.status}")
+                print(f"Delivered: {alert['attachments'][0]['fallback']}", flush=True)
+                self.send_response(204)
+            except Exception as error:
+                print(f"Mattermost delivery failed: {error}", flush=True)
+                self.send_response(502)
+            self.end_headers()
+        def log_message(self, fmt, *args):
+            print(fmt % args, flush=True)
+    HTTPServer(("0.0.0.0", 8080), Relay).serve_forever()
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: robusta-mattermost-relay
+  namespace: robusta
+  labels:
+    app.kubernetes.io/name: robusta-mattermost-relay
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: robusta-mattermost-relay
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: robusta-mattermost-relay
+    spec:
+      automountServiceAccountToken: false
+      containers:
+        - name: relay
+          image: python:3.13.2-alpine
+          command: ["python", "/app/relay.py"]
+          env:
+            - name: ALERT_ENVIRONMENT
+              value: dev
+            - name: MATTERMOST_WEBHOOK_URL
+              valueFrom:
+                secretKeyRef:
+                  name: robusta-mattermost-webhook
+                  key: url
+          ports:
+            - containerPort: 8080
+          resources:
+            requests:
+              cpu: 25m
+              memory: 64Mi
+            limits:
+              cpu: 100m
+              memory: 128Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            runAsNonRoot: true
+            runAsUser: 1000
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: script
+              mountPath: /app
+              readOnly: true
+      volumes:
+        - name: script
+          configMap:
+            name: robusta-mattermost-relay
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: robusta-mattermost-relay
+  namespace: robusta
+spec:
+  selector:
+    app.kubernetes.io/name: robusta-mattermost-relay
+  ports:
+    - port: 80
+      targetPort: 8080

@@ -1,0 +1,287 @@
+# Base Robusta values. Copy and supply environment-specific values separately.
+clusterName: dev
+
+globalConfig:
+  account_id: dev
+  signing_key: dev-signing-key-no-credentials
+
+enablePrometheusStack: false
+enableHolmesGPT: false
+
+# Define one or more named sinks in an environment values file. URLs and
+# credentials belong in deployment-time configuration, never this public base file.
+sinksConfig:
+  - webhook_sink:
+      name: mattermost-relay
+      url: http://robusta-mattermost-relay.robusta.svc.cluster.local/
+      format: text
+      size_limit: 12000
+
+# Observe cluster-wide. Alerts occur only for explicit customPlaybooks supplied
+# in a second values file.
+kubewatch:
+  config:
+    namespace: ""
+    resource:
+      # Native types jointly supported by current Kubewatch and Robusta.
+      clusterrole: true
+      clusterrolebinding: true
+      configmap: true
+      daemonset: true
+      deployment: true
+      # Event updates reach the runner but do not produce change findings in 0.48.0.
+      event: false
+      hpa: true
+      ingress: true
+      job: true
+      namespace: true
+      node: true
+      persistentvolume: true
+      pod: true
+      replicaset: true
+      serviceaccount: true
+      services: true
+      statefulset: true
+      # Opt-in only: Secret values are sensitive even when downstream redaction exists.
+      secret: false
+
+# CRD permissions are intentionally explicit. Enable only the CRD families used.
+runner:
+  crdPermissions:
+    argo: false
+    flux: false
+    keda: false
+    crossplane: false
+    istio: false
+    gatewayApi: false
+    velero: false
+    externalSecrets: false
+
+
+# -----------------------------------------------------------------------------
+# COPY/UNCOMMENT STARTER: zarf namespace and all native resource rule patterns
+# -----------------------------------------------------------------------------
+# This is intentionally commented so the public base does not send alerts.
+# Replace the .invalid URL before use. Select one or more sink names in each rule.
+# The examples below use `zarf`; change namespace_prefix and optionally add
+# name_prefix to limit a rule to a single object.
+#
+# sinksConfig:
+#   - webhook_sink:
+#       name: zarf-example-webhook
+#       url: https://webhook.example.invalid/REPLACE_ME
+#       format: text
+#       size_limit: 12000
+#
+# # Copy only the rules needed for an environment, replace zarf,
+# # and apply alongside helm/values.yaml. Do not alert cluster-wide by default.
+# x-alert-actions: &alert_actions
+#   - resource_babysitter: {}
+#   - customise_finding:
+#       severity: HIGH
+#       title: "$kind changed: $namespace/$name"
+# # Replace with one or more names defined in values.example.yaml.
+# x-sinks: &sinks [zarf-example-webhook]
+# x-change-filter: &change_filter
+#   ignore: [metadata.generation, metadata.resourceVersion, metadata.managedFields, status]
+#
+# customPlaybooks:
+#   - name: ConfigMapChanges
+#     triggers:
+#       - on_configmap_update:
+#           namespace_prefix: zarf
+#           change_filters:
+#             <<: *change_filter
+#             include: [data, binaryData]
+#     actions: *alert_actions
+#     sinks: *sinks
+#
+#   - name: DeploymentManifestChanges
+#     triggers:
+#       - on_deployment_update:
+#           namespace_prefix: zarf
+#           change_filters:
+#             <<: *change_filter
+#             include: [spec]
+#     actions: *alert_actions
+#     sinks: *sinks
+#
+#   - name: StatefulSetManifestChanges
+#     triggers:
+#       - on_statefulset_update:
+#           namespace_prefix: zarf
+#           change_filters:
+#             <<: *change_filter
+#             include: [spec]
+#     actions: *alert_actions
+#     sinks: *sinks
+#
+#   - name: DaemonSetManifestChanges
+#     triggers:
+#       - on_daemonset_update:
+#           namespace_prefix: zarf
+#           change_filters:
+#             <<: *change_filter
+#             include: [spec]
+#     actions: *alert_actions
+#     sinks: *sinks
+#
+#   - name: ServiceChanges
+#     triggers:
+#       - on_service_update:
+#           namespace_prefix: zarf
+#           change_filters:
+#             <<: *change_filter
+#             include: [spec]
+#     actions: *alert_actions
+#     sinks: *sinks
+#
+#   - name: IngressChanges
+#     triggers:
+#       - on_ingress_update:
+#           namespace_prefix: zarf
+#           change_filters:
+#             <<: *change_filter
+#             include: [spec]
+#     actions: *alert_actions
+#     sinks: *sinks
+#
+#
+#   - name: HorizontalPodAutoscalerChanges
+#     triggers:
+#       - on_horizontalpodautoscaler_update:
+#           namespace_prefix: zarf
+#           change_filters:
+#             <<: *change_filter
+#             include: [spec]
+#     actions: *alert_actions
+#     sinks: *sinks
+#
+#   - name: JobChanges
+#     triggers:
+#       - on_job_update:
+#           namespace_prefix: zarf
+#           change_filters:
+#             <<: *change_filter
+#             include: [spec]
+#     actions: *alert_actions
+#     sinks: *sinks
+#
+#   - name: PodChanges
+#     triggers:
+#       - on_pod_update:
+#           namespace_prefix: zarf
+#           change_filters:
+#             <<: *change_filter
+#             include: [spec]
+#     actions: *alert_actions
+#     sinks: *sinks
+#
+#   - name: ReplicaSetChanges
+#     triggers:
+#       - on_replicaset_update:
+#           namespace_prefix: zarf
+#           change_filters:
+#             <<: *change_filter
+#             include: [spec]
+#     actions: *alert_actions
+#     sinks: *sinks
+#
+#   - name: ServiceAccountChanges
+#     triggers:
+#       - on_serviceaccount_update:
+#           namespace_prefix: zarf
+#           change_filters:
+#             <<: *change_filter
+#             include: [automountServiceAccountToken, imagePullSecrets]
+#     actions: *alert_actions
+#     sinks: *sinks
+#
+#   - name: NamespaceChanges
+#     triggers:
+#       - on_namespace_update:
+#           change_filters:
+#             <<: *change_filter
+#             include: [metadata.labels, metadata.annotations]
+#     actions: *alert_actions
+#     sinks: *sinks
+#
+#   - name: NodeChanges
+#     triggers:
+#       - on_node_update:
+#           change_filters:
+#             <<: *change_filter
+#             include: [metadata.labels, spec]
+#     actions: *alert_actions
+#     sinks: *sinks
+#
+#   - name: PersistentVolumeChanges
+#     triggers:
+#       - on_persistentvolume_update:
+#           change_filters:
+#             <<: *change_filter
+#             include: [spec]
+#     actions: *alert_actions
+#     sinks: *sinks
+#
+#   - name: ClusterRoleChanges
+#     triggers:
+#       - on_clusterrole_update:
+#           change_filters:
+#             <<: *change_filter
+#             include: [rules, metadata.labels, metadata.annotations]
+#     actions: *alert_actions
+#     sinks: *sinks
+#
+#   - name: ClusterRoleBindingChanges
+#     triggers:
+#       - on_clusterrolebinding_update:
+#           change_filters:
+#             <<: *change_filter
+#             include: [roleRef, subjects, metadata.labels, metadata.annotations]
+#     actions: *alert_actions
+#     sinks: *sinks
+#
+# # Secrets are intentionally not enabled in helm/values.yaml. To use this rule, set
+# # kubewatch.config.resource.secret: true and review the upstream redaction behavior.
+# #  - name: SecretChanges
+# #    triggers:
+# #      - on_secret_update:
+# #          namespace_prefix: zarf
+# #          change_filters:
+# #            <<: *change_filter
+# #            include: [metadata.labels, metadata.annotations, type]
+# #    actions: *alert_actions
+# #    sinks: *sinks
+
+
+x-alert-actions: &alert_actions
+  - resource_babysitter: {}
+  - customise_finding:
+      severity: HIGH
+      title: "$kind changed: $namespace/$name"
+
+x-relay-sink: &relay_sink [mattermost-relay]
+x-change-filter: &change_filter
+  ignore: [metadata.generation, metadata.resourceVersion, metadata.managedFields, status]
+
+customPlaybooks:
+  - name: GrafanaConfigMapChanges
+    triggers:
+      - on_configmap_update:
+          namespace_prefix: grafana
+          change_filters:
+            <<: *change_filter
+            include: [data, binaryData]
+    actions: *alert_actions
+    sinks: *relay_sink
+
+  - name: RobustaTestConfigMapChanges
+    triggers:
+      - on_configmap_update:
+          namespace_prefix: robusta-test
+          change_filters:
+            <<: *change_filter
+            include: [data, binaryData]
+    actions: *alert_actions
+    sinks: *relay_sink

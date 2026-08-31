@@ -1,0 +1,38 @@
+# Disposable sonic-dev test rules. Apply alongside helm/values.yaml only for the lab.
+sinksConfig:
+  - webhook_sink:
+      name: mattermost-relay
+      url: http://robusta-mattermost-relay.robusta.svc.cluster.local/
+      format: text
+      size_limit: 12000
+
+x-alert-actions: &alert_actions
+  - resource_babysitter: {}
+  - customise_finding:
+      severity: HIGH
+      title: "$kind changed: $namespace/$name"
+
+x-relay-sink: &relay_sink [mattermost-relay]
+x-change-filter: &change_filter
+  ignore: [metadata.generation, metadata.resourceVersion, metadata.managedFields, status]
+
+customPlaybooks:
+  - name: GrafanaConfigMapChanges
+    triggers:
+      - on_configmap_update:
+          namespace_prefix: grafana
+          change_filters:
+            <<: *change_filter
+            include: [data, binaryData]
+    actions: *alert_actions
+    sinks: *relay_sink
+
+  - name: RobustaTestConfigMapChanges
+    triggers:
+      - on_configmap_update:
+          namespace_prefix: robusta-test
+          change_filters:
+            <<: *change_filter
+            include: [data, binaryData]
+    actions: *alert_actions
+    sinks: *relay_sink

@@ -1,0 +1,36 @@
+# Copyright 2024 Defense Unicorns
+# SPDX-License-Identifier: AGPL-3.0-or-later OR LicenseRef-Defense-Unicorns-Commercial
+
+# yaml-language-server: $schema=https://raw.githubusercontent.com/defenseunicorns/zarf/main/zarf.schema.json
+kind: ZarfPackageConfig
+metadata:
+  name: robusta
+  description: "UDS Robusta package"
+  version: "dev"
+  annotations:
+    dev.uds.title: Robusta
+    dev.uds.tagline: ""
+    dev.uds.categories: ""
+    dev.uds.keywords: ""
+    dev.uds.icon: ""
+
+variables:
+  - name: DOMAIN
+    default: "uds.dev"
+
+components:
+  - name: robusta
+    required: true
+    description: "Deploy Robusta"
+    import:
+      path: common
+    only:
+      flavor: upstream
+    charts:
+      - name: robusta
+        valuesFiles:
+          - values/upstream-values.yaml
+    images:
+      - docker.io/robustadev/robusta-runner:0.48.0
+      - docker.io/robustadev/kubewatch:v2.16.1
+      - docker.io/library/python:3.13.2-alpine
