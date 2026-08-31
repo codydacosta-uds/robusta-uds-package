@@ -4,6 +4,14 @@ This package deploys Robusta on UDS Core with profile-driven Kubernetes resource
 
 Users select exact namespaces, supported resource types, and named Mattermost sinks. The package owns the Robusta playbooks and webhook payload formatting; users do not need to write either.
 
+## Prerequisites
+
+- A Kubernetes cluster with UDS Core installed.
+- A Mattermost-compatible incoming webhook reachable from the cluster over HTTPS (`443`). Its hostname must resolve from the cluster and its certificate must be trusted by the relay container.
+- An externally managed Secret named `robusta-mattermost-webhook` in the `robusta` namespace. Each configured sink maps to a key in this Secret.
+
+A Robusta SaaS account, external database, object storage, storage class, UI/SSO configuration, and Prometheus stack are not required for the Mattermost resource-alert workflow. `ROBUSTA_ACCOUNT_ID` and `ROBUSTA_SIGNING_KEY` remain optional.
+
 ## Getting started
 
 ### 1. Create the webhook Secret
