@@ -1,11 +1,12 @@
 # Copyright 2025 Defense Unicorns
 # SPDX-License-Identifier: AGPL-3.0-or-later OR LicenseRef-Defense-Unicorns-Commercial
 # Base Robusta values. Copy and supply environment-specific values separately.
-clusterName: dev
+clusterName: ${ZARF_VAR_CLUSTER_NAME}
+alertEnvironment: ${ZARF_VAR_ALERT_ENVIRONMENT}
 
 globalConfig:
-  account_id: dev
-  signing_key: dev-signing-key-no-credentials
+  account_id: ${ZARF_VAR_ROBUSTA_ACCOUNT_ID}
+  signing_key: ${ZARF_VAR_ROBUSTA_SIGNING_KEY}
 
 enablePrometheusStack: false
 enableHolmesGPT: false

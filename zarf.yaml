@@ -17,6 +17,14 @@ metadata:
 variables:
   - name: DOMAIN
     default: "uds.dev"
+  - name: CLUSTER_NAME
+    default: "robusta-cluster"
+  - name: ROBUSTA_ACCOUNT_ID
+    default: ""
+  - name: ROBUSTA_SIGNING_KEY
+    default: ""
+  - name: ALERT_ENVIRONMENT
+    default: "production"
 
 components:
   - name: robusta

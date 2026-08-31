@@ -5,12 +5,21 @@ The package uses the official Robusta chart version `0.48.0`.
 ## Defaults
 
 - Robusta namespace: `robusta`
-- Alert/test namespace: `robusta-test`
-- Environment: `dev`
+- Alert namespace: `zarf` (the default playbook namespace)
+- Alert environment: `production`
 - Mattermost relay: enabled by default
 - Prometheus stack and HolmesGPT: disabled
 
-The package observes cluster-wide resources but emits findings only for the reviewed `robusta-test` ConfigMap playbook by default. Expand the allow-list declaratively in `values/upstream-values.yaml`.
+The package observes cluster-wide resources but emits findings only for the reviewed `zarf` ConfigMap and Deployment playbooks by default. Expand the allow-list declaratively in `values/upstream-values.yaml`.
+
+## Package variables
+
+Set these variables when deploying the package with `uds zarf package deploy --set NAME=value`:
+
+- `CLUSTER_NAME`: Robusta cluster name; defaults to `robusta-cluster`.
+- `ROBUSTA_ACCOUNT_ID`: Optional Robusta account ID; defaults to empty.
+- `ROBUSTA_SIGNING_KEY`: Optional Robusta signing key; defaults to empty. Supply this securely at deployment time.
+- `ALERT_ENVIRONMENT`: Environment label added by the Mattermost relay; defaults to `production`.
 
 ## Test flavor
 
