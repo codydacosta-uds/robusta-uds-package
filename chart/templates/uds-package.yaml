@@ -25,13 +25,11 @@ spec:
         remoteGenerated: KubeAPI
         selector:
           app: robusta-runner
-        port: 6443
         description: "Robusta runner Kubernetes API access"
       - direction: Egress
         remoteGenerated: KubeAPI
         selector:
           app: robusta-forwarder
-        port: 6443
         description: "Robusta forwarder Kubernetes API access"
 
       # The Mattermost relay delivers to an externally hosted webhook.
