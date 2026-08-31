@@ -1,0 +1,7 @@
+# Copyright 2026 Defense Unicorns
+# SPDX-License-Identifier: AGPL-3.0-or-later OR LicenseRef-Defense-Unicorns-Commercial
+
+alertEnvironment: ###ZARF_VAR_ALERT_ENVIRONMENT###
+watchSecrets: ###ZARF_VAR_WATCH_SECRETS###
+alertConfig: >-
+  ###ZARF_VAR_ALERT_CONFIG###

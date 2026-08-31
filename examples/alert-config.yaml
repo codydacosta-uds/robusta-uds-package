@@ -1,0 +1,40 @@
+# Copyright 2026 Defense Unicorns
+# SPDX-License-Identifier: AGPL-3.0-or-later OR LicenseRef-Defense-Unicorns-Commercial
+
+# Named sinks map friendly names to keys in Secret robusta-mattermost-webhook.
+defaultSinks:
+  - mattermost-default
+
+sinks:
+  mattermost-default:
+    secretKey: url
+
+# Namespaced profiles use exact namespace names. Omitting sinks uses defaultSinks.
+alertProfiles:
+  - name: zarf-namespaced-resources
+    enabled: true
+    namespaces:
+      - zarf
+    resources:
+      - ConfigMap
+      - DaemonSet
+      - Deployment
+      - HorizontalPodAutoscaler
+      - Ingress
+      - Job
+      - Pod
+      - ReplicaSet
+      - Service
+      - ServiceAccount
+      - StatefulSet
+
+# Cluster-scoped profiles have no namespaces and produce red attachments.
+clusterAlertProfiles:
+  - name: cluster-scoped-resources
+    enabled: true
+    resources:
+      - ClusterRole
+      - ClusterRoleBinding
+      - Namespace
+      - Node
+      - PersistentVolume

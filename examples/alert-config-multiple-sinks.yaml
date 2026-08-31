@@ -1,0 +1,36 @@
+# Copyright 2026 Defense Unicorns
+# SPDX-License-Identifier: AGPL-3.0-or-later OR LicenseRef-Defense-Unicorns-Commercial
+
+defaultSinks:
+  - mattermost-default
+
+sinks:
+  mattermost-default:
+    secretKey: url
+  application-alerts:
+    secretKey: application-url
+  security-alerts:
+    secretKey: security-url
+
+alertProfiles:
+  # Uses mattermost-default because sinks is omitted.
+  - name: zarf-namespaced-resources
+    namespaces: [zarf]
+    resources: [ConfigMap, Deployment, Service]
+
+  # One resource policy shared by two exact namespaces and routed elsewhere.
+  - name: application-team-resources
+    namespaces: [application-one, application-two]
+    resources: [ConfigMap, Deployment, Ingress, Service, StatefulSet]
+    sinks: [application-alerts]
+
+  # Profiles can send the same alert to multiple named sinks.
+  - name: payments-security-resources
+    namespaces: [payments]
+    resources: [Deployment, Ingress, Secret, ServiceAccount]
+    sinks: [application-alerts, security-alerts]
+
+clusterAlertProfiles:
+  - name: cluster-scoped-resources
+    resources: [ClusterRole, ClusterRoleBinding, Namespace, Node, PersistentVolume]
+    sinks: [security-alerts]

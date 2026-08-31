@@ -4,6 +4,7 @@
 tasks:
   - name: all
     actions:
+      - cmd: python3 -m unittest tests/test_relay_profiles.py
       - task: health-check
       - cmd: bash tests/robusta.test.sh
 

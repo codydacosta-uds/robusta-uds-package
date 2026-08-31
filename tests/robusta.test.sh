@@ -33,11 +33,23 @@ fi
 "${kubectl[@]}" get deployment robusta-mattermost-relay -n robusta >/dev/null
 "${kubectl[@]}" wait --for=condition=Available deployment/robusta-mattermost-mock -n robusta --timeout=180s
 
-# Cause a real Robusta change alert and verify the relay delivered a Mattermost-shaped payload.
-"${kubectl[@]}" create namespace robusta-test --dry-run=client -o yaml | "${kubectl[@]}" apply -f - >/dev/null
+# The production playbook set and safe defaults must also be present in the test flavor.
+profiles=$("${kubectl[@]}" get configmap robusta-mattermost-relay -n robusta -o jsonpath='{.data.profiles\.json}')
+grep -q 'zarf-namespaced-resources' <<<"$profiles"
+grep -q 'cluster-scoped-resources' <<<"$profiles"
+playbooks=$("${kubectl[@]}" get secret robusta-playbooks-config-secret -n robusta -o jsonpath='{.data.active_playbooks\.yaml}' | base64 --decode)
+[[ $(grep -c 'name: Profiled' <<<"$playbooks") -eq 17 ]]
+if "${kubectl[@]}" get clusterrole robusta-secret-watcher >/dev/null 2>&1; then
+  echo "Secret watcher RBAC must not exist with default WATCH_SECRETS=false"
+  exit 1
+fi
+
+# Cause a real default-profile change alert and verify the relay delivered a
+# Mattermost-shaped payload. The default exact namespace is zarf.
+"${kubectl[@]}" create namespace zarf --dry-run=client -o yaml | "${kubectl[@]}" apply -f - >/dev/null
 alert_name="robusta-alert-test-$$"
-"${kubectl[@]}" create configmap "$alert_name" -n robusta-test --from-literal=status=before --dry-run=client -o yaml | "${kubectl[@]}" apply -f - >/dev/null
-"${kubectl[@]}" patch configmap "$alert_name" -n robusta-test --type merge -p '{"data":{"status":"after"}}' >/dev/null
+"${kubectl[@]}" create configmap "$alert_name" -n zarf --from-literal=status=before --dry-run=client -o yaml | "${kubectl[@]}" apply -f - >/dev/null
+"${kubectl[@]}" patch configmap "$alert_name" -n zarf --type merge -p '{"data":{"status":"after"}}' >/dev/null
 
 for _ in $(seq 1 60); do
   payload=$("${kubectl[@]}" exec deployment/robusta-mattermost-mock -n robusta -- python -c 'from urllib.request import urlopen; print(urlopen("http://127.0.0.1:8080/received", timeout=2).read().decode())' 2>/dev/null || true)

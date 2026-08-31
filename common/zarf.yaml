@@ -15,6 +15,8 @@ components:
         namespace: robusta
         version: 0.1.0
         localPath: ../chart
+        valuesFiles:
+          - ../values/package-values.yaml
       - name: robusta
         namespace: robusta
         url: https://robusta-charts.storage.googleapis.com

@@ -25,6 +25,13 @@ variables:
     default: ""
   - name: ALERT_ENVIRONMENT
     default: "production"
+  # Pass a compact JSON object. See docs/configuration.md for the readable YAML
+  # form and the yq command used to provide it at deployment time.
+  - name: ALERT_CONFIG
+    default: '{"defaultSinks":["mattermost-default"],"sinks":{"mattermost-default":{"secretKey":"url"}},"alertProfiles":[{"name":"zarf-namespaced-resources","enabled":true,"namespaces":["zarf"],"resources":["ConfigMap","DaemonSet","Deployment","HorizontalPodAutoscaler","Ingress","Job","Pod","ReplicaSet","Service","ServiceAccount","StatefulSet"]}],"clusterAlertProfiles":[{"name":"cluster-scoped-resources","enabled":true,"resources":["ClusterRole","ClusterRoleBinding","Namespace","Node","PersistentVolume"]}]}'
+  - name: WATCH_SECRETS
+    description: Enable opt-in Kubewatch observation for Secret updates
+    default: "false"
 
 components:
   - name: robusta
@@ -65,6 +72,7 @@ components:
     charts:
       - name: robusta
         valuesFiles:
+          - values/upstream-values.yaml
           - tests/test-values.yaml
     images:
       - docker.io/robustadev/robusta-runner:0.48.0
