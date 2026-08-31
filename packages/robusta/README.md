@@ -19,14 +19,21 @@ kubectl -n robusta create secret generic robusta-mattermost-webhook \
 
 The relay reads key `url` from that Secret. The package does not create or populate the Secret.
 
+## Files to update before deployment
+
+1. **`values/upstream-values.yaml`** — set `clusterName`, `globalConfig.account_id`, and `globalConfig.signing_key`; update the `customPlaybooks` namespace filters and environment-specific alert rules. Keep this file private if it contains real credentials.
+2. **`manifests/mattermost-relay.yaml`** — update `ALERT_ENVIRONMENT` under the relay Deployment from `dev` to the target environment. Keep the Secret reference unchanged.
+3. **Kubernetes Secret (not a repository file)** — create `robusta-mattermost-webhook` in namespace `robusta`, with key `url` containing the Mattermost webhook URL.
+4. **`bundle/uds-bundle.yaml`** — normally no changes are needed. Add dependency packages here only if the selected Robusta configuration enables them.
+
+The checked-in `dev` values are safe placeholders only and are not production credentials. Do not commit real webhook URLs, signing keys, or account credentials.
+
 ## Deployment inputs
 
-Before deployment, provide these environment-specific inputs:
+Before deployment, provide:
 
-1. A UDS Core cluster with the base layer and outbound HTTPS access to the Mattermost host.
-2. The `robusta-mattermost-webhook` Secret in namespace `robusta`, with key `url` containing the webhook URL.
-3. A unique Robusta `clusterName` and account identifier in a private values override. The checked-in `dev` values are safe placeholders only and are not production credentials.
-4. Approval of the default alert scope (`robusta-test`) or a reviewed replacement in `customPlaybooks`.
+- A UDS Core cluster with the base layer and outbound HTTPS access to the Mattermost host.
+- Approval of the default alert scope (`robusta-test`) or a reviewed replacement in `customPlaybooks`.
 
 Build and deploy from this directory:
 
