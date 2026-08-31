@@ -34,3 +34,31 @@ components:
       - docker.io/robustadev/robusta-runner:0.48.0
       - docker.io/robustadev/kubewatch:v2.16.1
       - docker.io/library/python:3.13.2-alpine
+
+  - name: mattermost-test-mock
+    required: true
+    description: "Test-only Mattermost webhook receiver"
+    only:
+      flavor: test
+    charts:
+      - name: uds-robusta-test-mock
+        namespace: robusta
+        localPath: test-mock-chart
+    images:
+      - docker.io/library/python:3.13.2-alpine
+
+  - name: robusta
+    required: true
+    description: "Deploy Robusta with the Mattermost test receiver"
+    import:
+      path: common
+    only:
+      flavor: test
+    charts:
+      - name: robusta
+        valuesFiles:
+          - values/test-values.yaml
+    images:
+      - docker.io/robustadev/robusta-runner:0.48.0
+      - docker.io/robustadev/kubewatch:v2.16.1
+      - docker.io/library/python:3.13.2-alpine

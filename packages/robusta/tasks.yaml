@@ -12,13 +12,18 @@ tasks:
         with:
           options: "--skip-sbom"
 
+  - name: create-test-package
+    description: Create the Robusta test-flavor Zarf package
+    actions:
+      - cmd: uds zarf package create . --flavor test --skip-sbom --confirm
+
   - name: create-test-bundle
-    description: Create the Robusta development UDS bundle
+    description: Create the Robusta test-flavor UDS bundle
     actions:
       - cmd: uds create bundle/ --confirm
 
   - name: dev
-    description: Build the Robusta package and development bundle
+    description: Build the Robusta test package and development bundle
     actions:
-      - task: create-dev-package
+      - task: create-test-package
       - task: create-test-bundle

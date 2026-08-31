@@ -12,6 +12,10 @@ The package uses the official Robusta chart version `0.48.0`.
 
 The package observes cluster-wide resources but emits findings only for the reviewed `robusta-test` ConfigMap playbook by default. Expand the allow-list declaratively in `values/upstream-values.yaml`.
 
+## Test flavor
+
+The `test` flavor includes a disposable in-cluster Mattermost-compatible HTTP receiver and a test-only `robusta-mattermost-webhook` Secret. CI uses it to generate a ConfigMap change and verify that the relay posts a Mattermost-formatted payload. The mock receiver is not included in the default `upstream` flavor.
+
 ## Mattermost webhook Secret
 
 The webhook URL is external configuration and is never stored in this package. Create the Secret before deploying:

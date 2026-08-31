@@ -10,4 +10,4 @@ metadata:
 packages:
   - name: robusta
     path: ../
-    ref: dev
+    ref: dev-test

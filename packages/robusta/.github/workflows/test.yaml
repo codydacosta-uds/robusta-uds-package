@@ -36,7 +36,7 @@ jobs:
       fail-fast: false
       matrix:
         type: [install]
-        flavor: [upstream]
+        flavor: [test]
     with:
       options: --set BASE_REPO="ghcr.io/uds-packages"
       runsOn: appstore-8-core-amd64

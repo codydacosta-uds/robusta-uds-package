@@ -15,7 +15,14 @@ tasks:
         wait:
           cluster:
             kind: Deployment
-            name: robusta
+            name: robusta-runner
+            namespace: robusta
+            condition: Available
+      - description: Robusta Forwarder Health Check
+        wait:
+          cluster:
+            kind: Deployment
+            name: robusta-forwarder
             namespace: robusta
             condition: Available
       - description: Mattermost relay Health Check

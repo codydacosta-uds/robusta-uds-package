@@ -19,4 +19,6 @@ kubectl -n robusta create secret generic robusta-mattermost-webhook \
 
 The relay reads key `url` from that Secret. The package does not create or populate the Secret.
 
+The `test` flavor deploys a disposable in-cluster Mattermost-compatible receiver and is used by CI to verify the complete alert delivery path. The receiver and test Secret are never included in the default `upstream` flavor.
+
 Source assets were copied from `toolbox/robusta`; that source directory is not modified.
