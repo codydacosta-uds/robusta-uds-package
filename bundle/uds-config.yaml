@@ -1,2 +1,33 @@
 # Copyright 2024 Defense Unicorns
 # SPDX-License-Identifier: AGPL-3.0-or-later OR LicenseRef-Defense-Unicorns-Commercial
+
+# Exercise the documented multi-line uds-config input path in CI.
+variables:
+  robusta:
+    CLUSTER_NAME: "robusta-test"
+    ALERT_ENVIRONMENT: "test"
+    WATCH_SECRETS: "false"
+    ALERT_CONFIG: |-
+      {
+        "defaultSinks": ["mattermost-default"],
+        "sinks": {
+          "mattermost-default": {
+            "secretKey": "url"
+          }
+        },
+        "alertProfiles": [
+          {
+            "name": "zarf-namespaced-resources",
+            "enabled": true,
+            "namespaces": ["zarf"],
+            "resources": ["ConfigMap", "DaemonSet", "Deployment", "HorizontalPodAutoscaler", "Ingress", "Job", "Pod", "ReplicaSet", "Service", "ServiceAccount", "StatefulSet"]
+          }
+        ],
+        "clusterAlertProfiles": [
+          {
+            "name": "cluster-scoped-resources",
+            "enabled": true,
+            "resources": ["ClusterRole", "ClusterRoleBinding", "Namespace", "Node", "PersistentVolume"]
+          }
+        ]
+      }

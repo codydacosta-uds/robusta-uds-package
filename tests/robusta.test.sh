@@ -24,7 +24,8 @@ wait_for_deployment robusta-forwarder
 wait_for_deployment robusta-mattermost-relay
 
 restart_counts() {
-  "${kubectl[@]}" get pods -n robusta -o jsonpath='{range .items[*]}{.metadata.name}{" "}{range .status.containerStatuses[*]}{.restartCount}{" "}{end}{"\n"}{end}'
+  # Ignore pods already terminating as part of a completed rollout.
+  "${kubectl[@]}" get pods -n robusta -o go-template='{{range .items}}{{if not .metadata.deletionTimestamp}}{{.metadata.name}}{{" "}}{{range .status.containerStatuses}}{{.restartCount}}{{" "}}{{end}}{{"\n"}}{{end}}{{end}}'
 }
 
 # Allow startup retries while network policy mutations converge, then require stability.

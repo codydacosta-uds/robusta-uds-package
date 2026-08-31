@@ -3,5 +3,6 @@
 
 alertEnvironment: ###ZARF_VAR_ALERT_ENVIRONMENT###
 watchSecrets: ###ZARF_VAR_WATCH_SECRETS###
-alertConfig: >-
-  ###ZARF_VAR_ALERT_CONFIG###
+# JSON uses double quotes; a YAML single-quoted scalar safely accepts either
+# compact JSON from --set-variables or multi-line JSON from uds-config.yaml.
+alertConfig: '###ZARF_VAR_ALERT_CONFIG###'
