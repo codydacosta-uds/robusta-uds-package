@@ -43,7 +43,7 @@ components:
     charts:
       - name: uds-robusta-test-mock
         namespace: robusta
-        localPath: test-mock-chart
+        localPath: tests/mattermost-mock-chart
     images:
       - docker.io/library/python:3.13.2-alpine
 
@@ -57,7 +57,7 @@ components:
     charts:
       - name: robusta
         valuesFiles:
-          - values/test-values.yaml
+          - tests/test-values.yaml
     images:
       - docker.io/robustadev/robusta-runner:0.48.0
       - docker.io/robustadev/kubewatch:v2.16.1
