@@ -9,10 +9,10 @@ metadata:
   version: "dev"
   annotations:
     dev.uds.title: Robusta
-    dev.uds.tagline: ""
-    dev.uds.categories: ""
-    dev.uds.keywords: ""
-    dev.uds.icon: ""
+    dev.uds.tagline: Kubernetes monitoring, troubleshooting, and alerting
+    dev.uds.categories: Monitoring, Observability, DevOps
+    dev.uds.keywords: Kubernetes, Monitoring, Alerting, Troubleshooting, Observability
+    dev.uds.icon: https://github.com/robusta-dev.png
 
 variables:
   - name: DOMAIN

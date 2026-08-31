@@ -5,6 +5,7 @@ tasks:
   - name: all
     actions:
       - task: health-check
+      - cmd: bash tests/robusta.test.sh
 
 
   # Ensure application deploys successfully and becomes available
@@ -15,6 +16,13 @@ tasks:
           cluster:
             kind: Deployment
             name: robusta
+            namespace: robusta
+            condition: Available
+      - description: Mattermost relay Health Check
+        wait:
+          cluster:
+            kind: Deployment
+            name: robusta-mattermost-relay
             namespace: robusta
             condition: Available
 
