@@ -254,7 +254,6 @@ runner:
 # #    actions: *alert_actions
 # #    sinks: *sinks
 
-
 x-alert-actions: &alert_actions
   - resource_babysitter: {}
   - customise_finding:
@@ -286,18 +285,6 @@ customPlaybooks:
     actions: *alert_actions
     sinks: *relay_sink
 
-# Test-only alert rules and receiver sink.
-x-alert-actions: &alert_actions
-  - resource_babysitter: {}
-  - customise_finding:
-      severity: HIGH
-      title: "$kind changed: $namespace/$name"
-
-x-relay-sink: &relay_sink [mattermost-relay]
-x-change-filter: &change_filter
-  ignore: [metadata.generation, metadata.resourceVersion, metadata.managedFields, status]
-
-customPlaybooks:
   - name: GrafanaConfigMapChanges
     triggers:
       - on_configmap_update:

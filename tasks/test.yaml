@@ -32,4 +32,3 @@ tasks:
             name: robusta-mattermost-relay
             namespace: robusta
             condition: Available
-
