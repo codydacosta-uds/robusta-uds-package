@@ -257,11 +257,17 @@ runner:
 # #    actions: *alert_actions
 # #    sinks: *sinks
 
-x-alert-actions: &alert_actions
+x-configmap-alert-actions: &configmap_alert_actions
   - resource_babysitter: {}
   - customise_finding:
       severity: HIGH
-      title: "$kind changed: $namespace/$name"
+      title: "ConfigMap changed: $namespace/$name"
+
+x-deployment-alert-actions: &deployment_alert_actions
+  - resource_babysitter: {}
+  - customise_finding:
+      severity: HIGH
+      title: "Deployment changed: $namespace/$name"
 
 x-relay-sink: &relay_sink [mattermost-relay]
 x-change-filter: &change_filter
@@ -275,7 +281,7 @@ customPlaybooks:
           change_filters:
             <<: *change_filter
             include: [data, binaryData]
-    actions: *alert_actions
+    actions: *configmap_alert_actions
     sinks: *relay_sink
 
   - name: ZarfDeploymentManifestChanges
@@ -285,7 +291,7 @@ customPlaybooks:
           change_filters:
             <<: *change_filter
             include: [spec]
-    actions: *alert_actions
+    actions: *deployment_alert_actions
     sinks: *relay_sink
 
   - name: GrafanaConfigMapChanges
@@ -295,7 +301,7 @@ customPlaybooks:
           change_filters:
             <<: *change_filter
             include: [data, binaryData]
-    actions: *alert_actions
+    actions: *configmap_alert_actions
     sinks: *relay_sink
 
   - name: RobustaTestConfigMapChanges
@@ -305,5 +311,5 @@ customPlaybooks:
           change_filters:
             <<: *change_filter
             include: [data, binaryData]
-    actions: *alert_actions
+    actions: *configmap_alert_actions
     sinks: *relay_sink

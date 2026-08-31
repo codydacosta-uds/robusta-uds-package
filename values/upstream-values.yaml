@@ -78,11 +78,13 @@ runner:
 #
 # # Copy only the rules needed for an environment, replace zarf,
 # # and apply alongside helm/values.yaml. Do not alert cluster-wide by default.
-# x-alert-actions: &alert_actions
+# Define actions per resource kind and use an explicit title. Robusta 0.48.0
+# can resolve $kind to None for ConfigMap updates.
+# x-configmap-alert-actions: &configmap_alert_actions
 #   - resource_babysitter: {}
 #   - customise_finding:
 #       severity: HIGH
-#       title: "$kind changed: $namespace/$name"
+#       title: "ConfigMap changed: $namespace/$name"
 # # Replace with one or more names defined in values.example.yaml.
 # x-sinks: &sinks [zarf-example-webhook]
 # x-change-filter: &change_filter
@@ -258,11 +260,18 @@ runner:
 # #    sinks: *sinks
 
 
-x-alert-actions: &alert_actions
+x-configmap-alert-actions: &configmap_alert_actions
   - resource_babysitter: {}
   - customise_finding:
       severity: HIGH
-      title: "$kind changed: $namespace/$name"
+      # Robusta 0.48.0 resolves $kind to None for ConfigMap update findings.
+      title: "ConfigMap changed: $namespace/$name"
+
+x-deployment-alert-actions: &deployment_alert_actions
+  - resource_babysitter: {}
+  - customise_finding:
+      severity: HIGH
+      title: "Deployment changed: $namespace/$name"
 
 x-relay-sink: &relay_sink [mattermost-relay]
 x-change-filter: &change_filter
@@ -276,7 +285,7 @@ customPlaybooks:
           change_filters:
             <<: *change_filter
             include: [data, binaryData]
-    actions: *alert_actions
+    actions: *configmap_alert_actions
     sinks: *relay_sink
 
   - name: ZarfDeploymentManifestChanges
@@ -286,5 +295,5 @@ customPlaybooks:
           change_filters:
             <<: *change_filter
             include: [spec]
-    actions: *alert_actions
+    actions: *deployment_alert_actions
     sinks: *relay_sink

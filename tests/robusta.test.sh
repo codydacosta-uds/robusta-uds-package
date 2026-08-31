@@ -41,7 +41,7 @@ alert_name="robusta-alert-test-$$"
 
 for _ in $(seq 1 60); do
   payload=$("${kubectl[@]}" exec deployment/robusta-mattermost-mock -n robusta -- python -c 'from urllib.request import urlopen; print(urlopen("http://127.0.0.1:8080/received", timeout=2).read().decode())' 2>/dev/null || true)
-  if grep -q "$alert_name" <<<"$payload" && grep -q 'Environment' <<<"$payload" && grep -q 'attachments' <<<"$payload"; then
+  if grep -q "$alert_name" <<<"$payload" && grep -q 'ConfigMap changed' <<<"$payload" && grep -q 'Environment' <<<"$payload" && grep -q 'attachments' <<<"$payload"; then
     echo "Mattermost relay test passed"
     exit 0
   fi
