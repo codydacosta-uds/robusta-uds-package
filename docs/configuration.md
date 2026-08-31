@@ -69,16 +69,52 @@ kubectl -n robusta create secret generic robusta-mattermost-webhook \
 
 Then map friendly sink names to those keys, as shown in [`examples/alert-config-multiple-sinks.yaml`](../examples/alert-config-multiple-sinks.yaml).
 
-## Deploy a profile file
+## Provide package variables
 
-`ALERT_CONFIG` accepts the complete profile collection as compact JSON. Keep the source configuration readable as YAML and convert it during deployment:
+There are two supported deployment paths. In both cases, `ALERT_CONFIG` is a JSON string at the package boundary. Webhook URLs remain in the external Kubernetes Secret and must not be placed in `ALERT_CONFIG`.
+
+### Direct Zarf package deployment
+
+Keep profiles readable as YAML and convert them to compact JSON with `yq`:
 
 ```bash
 ALERT_CONFIG="$(yq -o=json -I=0 examples/alert-config.yaml)"
 uds zarf package deploy zarf-package-robusta-amd64-<version>-upstream.tar.zst \
+  --set-variables CLUSTER_NAME=my-cluster \
+  --set-variables ALERT_ENVIRONMENT=development \
+  --set-variables WATCH_SECRETS=false \
   --set-variables "ALERT_CONFIG=${ALERT_CONFIG}" \
   --confirm
 ```
+
+### `uds-config.yaml`
+
+Merge the Robusta package variables under `variables.robusta` in the environment's existing `uds-config.yaml`:
+
+```yaml
+variables:
+  robusta:
+    CLUSTER_NAME: "my-cluster"
+    ALERT_ENVIRONMENT: "development"
+    WATCH_SECRETS: "false"
+    ALERT_CONFIG: |-
+      {
+        "defaultSinks": ["mattermost-default"],
+        "sinks": {"mattermost-default": {"secretKey": "url"}},
+        "alertProfiles": [
+          {
+            "name": "application-resources",
+            "namespaces": ["application"],
+            "resources": ["ConfigMap", "Deployment", "Service"]
+          }
+        ],
+        "clusterAlertProfiles": []
+      }
+```
+
+A complete copyable block is available at [`examples/uds-config.yaml`](../examples/uds-config.yaml). Do not commit webhook URLs or `ROBUSTA_SIGNING_KEY` values to this file.
+
+## Add namespace profiles
 
 To add another namespace with the default sink, add another profile and omit `sinks`:
 

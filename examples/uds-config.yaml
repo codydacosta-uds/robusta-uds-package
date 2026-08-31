@@ -1,0 +1,36 @@
+# Copyright 2026 Defense Unicorns
+# SPDX-License-Identifier: AGPL-3.0-or-later OR LicenseRef-Defense-Unicorns-Commercial
+
+# Example Robusta package variables to merge into an environment uds-config.
+# The robusta-mattermost-webhook Secret is managed separately.
+variables:
+  robusta:
+    CLUSTER_NAME: "example-cluster"
+    ALERT_ENVIRONMENT: "development"
+    WATCH_SECRETS: "false"
+    # ALERT_CONFIG must be a JSON string. Multi-line JSON keeps it readable in
+    # uds-config.yaml. Sink names reference keys in the external Secret.
+    ALERT_CONFIG: |-
+      {
+        "defaultSinks": ["mattermost-default"],
+        "sinks": {
+          "mattermost-default": {
+            "secretKey": "url"
+          }
+        },
+        "alertProfiles": [
+          {
+            "name": "application-resources",
+            "enabled": true,
+            "namespaces": ["application", "application-dev"],
+            "resources": ["ConfigMap", "Deployment", "Ingress", "Service"]
+          }
+        ],
+        "clusterAlertProfiles": [
+          {
+            "name": "cluster-scoped-resources",
+            "enabled": true,
+            "resources": ["ClusterRole", "ClusterRoleBinding", "Namespace", "Node", "PersistentVolume"]
+          }
+        ]
+      }
