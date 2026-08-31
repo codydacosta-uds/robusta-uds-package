@@ -4,7 +4,15 @@
 
 set -euo pipefail
 
-kubectl=(./uds zarf tools kubectl)
+if [[ -x ./uds ]]; then
+  uds_bin=./uds
+elif command -v uds >/dev/null 2>&1; then
+  uds_bin=$(command -v uds)
+else
+  echo "UDS CLI not found at ./uds or on PATH"
+  exit 1
+fi
+kubectl=("$uds_bin" zarf tools kubectl)
 
 wait_for_deployment() {
   local name="$1"
