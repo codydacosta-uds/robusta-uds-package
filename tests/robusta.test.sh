@@ -50,3 +50,5 @@ done
 
 echo "Timed out waiting for the Mattermost mock to receive the Robusta alert"
 exit 1
+
+# CI integration coverage is exercised by the UDS Common test workflow.
