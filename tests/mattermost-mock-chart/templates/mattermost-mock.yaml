@@ -16,7 +16,11 @@ data:
     class Receiver(BaseHTTPRequestHandler):
         def do_POST(self):
             length = int(self.headers.get("Content-Length", "0"))
-            PAYLOAD.write_bytes(self.rfile.read(length))
+            # Retain history so background cluster alerts cannot overwrite the
+            # expected test finding before the polling assertion reads it.
+            with PAYLOAD.open("ab") as payloads:
+                payloads.write(self.rfile.read(length))
+                payloads.write(b"\n")
             self.send_response(204)
             self.end_headers()
 

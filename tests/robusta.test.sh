@@ -49,6 +49,9 @@ fi
 "${kubectl[@]}" create namespace zarf --dry-run=client -o yaml | "${kubectl[@]}" apply -f - >/dev/null
 alert_name="robusta-alert-test-$$"
 "${kubectl[@]}" create configmap "$alert_name" -n zarf --from-literal=status=before --dry-run=client -o yaml | "${kubectl[@]}" apply -f - >/dev/null
+# Ensure the add event is in the informer cache so the following update always
+# has a before/after pair for resource_babysitter.
+sleep 5
 "${kubectl[@]}" patch configmap "$alert_name" -n zarf --type merge -p '{"data":{"status":"after"}}' >/dev/null
 
 for _ in $(seq 1 60); do
