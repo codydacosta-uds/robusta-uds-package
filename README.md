@@ -2,7 +2,71 @@
 
 This package deploys Robusta on UDS Core with profile-driven Kubernetes resource alerts and uniform Mattermost notifications.
 
-Users select exact namespaces, supported resource types, and named Mattermost sinks. The package owns the Robusta playbooks and webhook payload formatting; users do not need to write either.
+Users can optionally select exact namespaces, supported resource types, and named Mattermost sinks. The package owns the Robusta playbooks and webhook payload formatting; users do not need to write either.
+
+## Out-of-the-box behavior
+
+After the required webhook Secret is created, deploying the package **without `ALERT_CONFIG`** immediately enables these defaults:
+
+### Namespaced change alerts
+
+The `zarf-namespaced-resources` profile sends yellow Mattermost notifications for updates in the exact `zarf` namespace to:
+
+- `ConfigMap`
+- `DaemonSet`
+- `Deployment`
+- `HorizontalPodAutoscaler`
+- `Ingress`
+- `Job`
+- `Pod`
+- `ReplicaSet`
+- `Service`
+- `ServiceAccount`
+- `StatefulSet`
+
+Updates in other namespaces are not delivered unless another profile explicitly includes those namespaces.
+
+### Cluster-scoped change alerts
+
+The `cluster-scoped-resources` profile sends red Mattermost notifications for updates to:
+
+- `ClusterRole`
+- `ClusterRoleBinding`
+- `Namespace`
+- `Node`
+- `PersistentVolume`
+
+### Delivery and presentation
+
+- Both profiles send to `mattermost-default`, which maps to the `url` key in `robusta/robusta-mattermost-webhook`.
+- Every supported resource uses the same package-managed Mattermost attachment layout: environment, namespace or `cluster-scoped`, resource, kind, scope, severity, matching profile, resource-aware change details, and Robusta footer.
+- The built-in playbooks report resource **updates/changes**. They do not advertise create/delete lifecycle notifications.
+- Secret observation is disabled. Events, PersistentVolumeClaims, NetworkPolicies, and arbitrary custom resources are not part of the built-in alert path.
+- Prometheus, HolmesGPT, Robusta SaaS integration, and a user-facing Robusta UI are not enabled or required.
+
+> [!NOTE]
+> `ALERT_CONFIG` is optional. Override it only to change exact namespaces, supported resource selections, or named-sink routing. Alert formatting and the native-resource playbooks remain package-managed.
+
+## How the alerting pieces fit together
+
+```text
+Kubernetes resource update
+  -> Robusta forwarder (Kubewatch)
+  -> Robusta runner and package playbook
+  -> package relay profile matching
+  -> named Mattermost sink
+```
+
+| Piece | Purpose |
+| --- | --- |
+| **Forwarder / Kubewatch** | Observes supported native Kubernetes resource updates and sends them to the Robusta runner. |
+| **Robusta runner** | Executes the package's internal playbook for the resource type and produces a normalized change finding. |
+| **Package playbooks** | Convert supported resource events into a consistent internal finding. These are maintained by the package, not authored in `ALERT_CONFIG`. |
+| **Alert profiles** | Optionally select exact namespaces, supported resources, and destination sinks. Profiles are the package's user-facing policy layer. |
+| **Named sinks** | Friendly destination names such as `mattermost-default`. Each name maps to a key in the external webhook Secret; URLs are never stored in profiles. |
+| **Mattermost relay** | Applies profile matching, deduplication, Secret redaction, sink routing, and the uniform Mattermost attachment layout. |
+
+Robusta's upstream webhook sink is configured internally to send normalized findings to the relay. The named sinks exposed in `ALERT_CONFIG` are the external Mattermost destinations selected by users.
 
 ## Prerequisites
 
@@ -26,15 +90,15 @@ kubectl -n robusta create secret generic robusta-mattermost-webhook \
 
 For multiple destinations, create one key per webhook. Profiles refer to friendly sink names that map to these keys; see [`examples/alert-config-multiple-sinks.yaml`](examples/alert-config-multiple-sinks.yaml).
 
-### 2. Choose what to watch
+### 2. Use the defaults or customize profiles
 
-Start with the provided profile:
+No profile file is required for the default behavior described above. To customize namespaces, resources, or sink routing, start with the provided profile:
 
 ```bash
 cp examples/alert-config.yaml my-alert-config.yaml
 ```
 
-Edit `my-alert-config.yaml` to select exact namespaces and resources. Namespace matching is exact: `application` does not match `application-dev`.
+Edit `my-alert-config.yaml` as needed. Namespace matching is exact: `application` does not match `application-dev`.
 
 ### 3. Deploy using one of these methods
 
@@ -42,19 +106,30 @@ Edit `my-alert-config.yaml` to select exact namespaces and resources. Namespace 
 
 Use this method when you have a released `zarf-package-robusta-...tar.zst` artifact:
 
+Deploy with the default profiles:
+
 ```bash
 PACKAGE=zarf-package-robusta-amd64-<version>-upstream.tar.zst
+
+uds zarf package deploy "$PACKAGE" \
+  --set-variables CLUSTER_NAME=my-cluster \
+  --set-variables ALERT_ENVIRONMENT=development \
+  --confirm
+```
+
+For custom profiles, convert the readable YAML file to JSON and add `ALERT_CONFIG`:
+
+```bash
 ALERT_CONFIG="$(yq -o=json -I=0 my-alert-config.yaml)"
 
 uds zarf package deploy "$PACKAGE" \
   --set-variables CLUSTER_NAME=my-cluster \
   --set-variables ALERT_ENVIRONMENT=development \
-  --set-variables WATCH_SECRETS=false \
   --set-variables "ALERT_CONFIG=${ALERT_CONFIG}" \
   --confirm
 ```
 
-`ALERT_CONFIG` is JSON at the package boundary. Keeping the source as YAML and converting it with `yq` makes profile editing easier.
+`ALERT_CONFIG` is JSON at the package boundary. `WATCH_SECRETS` can also be omitted unless Secret metadata alerts are intentionally enabled.
 
 #### Option B: add Robusta to `uds-config.yaml`
 
@@ -66,6 +141,7 @@ variables:
     CLUSTER_NAME: "my-cluster"
     ALERT_ENVIRONMENT: "development"
     WATCH_SECRETS: "false"
+    # Optional: omit ALERT_CONFIG to use the package defaults.
     ALERT_CONFIG: |-
       {
         "defaultSinks": ["mattermost-default"],
@@ -96,25 +172,24 @@ The UDS Package should report `Ready`, and these deployments should be available
 - `robusta-forwarder`
 - `robusta-mattermost-relay`
 
-Test a configured namespace by changing a disposable ConfigMap:
+Test an exact namespace included in a profile by changing a disposable ConfigMap. The default profile uses `zarf`:
 
 ```bash
-kubectl -n application create configmap robusta-getting-started \
+NAMESPACE=zarf
+kubectl -n "$NAMESPACE" create configmap robusta-getting-started \
   --from-literal=status=before
-kubectl -n application patch configmap robusta-getting-started \
+kubectl -n "$NAMESPACE" patch configmap robusta-getting-started \
   --type=merge -p '{"data":{"status":"after"}}'
-kubectl -n application delete configmap robusta-getting-started
+kubectl -n "$NAMESPACE" delete configmap robusta-getting-started
 ```
-
-Replace `application` with an exact namespace included in your profile.
 
 ## Defaults
 
 Without an `ALERT_CONFIG` override, the package uses:
 
 - Install namespace: `robusta`
-- `zarf-namespaced-resources`: enabled for exact namespace `zarf`, yellow attachments
-- `cluster-scoped-resources`: enabled, red attachments
+- `zarf-namespaced-resources`: enabled for exact namespace `zarf`; watches every supported namespaced resource except opt-in Secrets and produces yellow attachments
+- `cluster-scoped-resources`: enabled for every supported cluster-scoped resource and produces red attachments
 - Default sink: `mattermost-default`, mapped to Secret key `url`
 - Secret observation: disabled until explicitly enabled
 - Prometheus stack and HolmesGPT: disabled

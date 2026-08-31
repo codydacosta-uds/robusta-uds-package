@@ -13,6 +13,9 @@ With a valid `robusta-mattermost-webhook` Secret, the package starts alerting im
 
 The readable default is [`examples/alert-config.yaml`](../examples/alert-config.yaml).
 
+> [!NOTE]
+> `ALERT_CONFIG` is optional. Omit it to use these defaults. An override changes profile selection and sink routing; the package continues to own the normalized native-resource playbooks and Mattermost presentation.
+
 ## Profile schema
 
 ```yaml
