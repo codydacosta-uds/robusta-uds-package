@@ -2,7 +2,7 @@
 
 All notable changes to this package will be documented here.
 
-## Unreleased
+## 0.48.0-uds.0 - 2026-09-01
 
 - Add application Profiles with lowercase per-resource configuration.
 - Enable applicable crash-loop, image-pull, OOM, eviction, and Job-failure monitoring by default.

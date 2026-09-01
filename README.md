@@ -58,11 +58,26 @@ Use the already-packaged relay image so the test does not require an external re
 IMAGE=$(kubectl -n robusta get deployment robusta-alert-relay \
   -o jsonpath='{.spec.template.spec.containers[0].image}')
 
-kubectl -n zarf create deployment robusta-getting-started --image="$IMAGE" \
-  --dry-run=client -o yaml |
-  kubectl set command -f - --local -o yaml -- \
-    python -c 'raise RuntimeError("intentional quick-start test")' |
-  kubectl apply -f -
+cat <<YAML | kubectl apply -f -
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: robusta-getting-started
+  namespace: zarf
+spec:
+  selector:
+    matchLabels:
+      app: robusta-getting-started
+  template:
+    metadata:
+      labels:
+        app: robusta-getting-started
+    spec:
+      containers:
+        - name: test
+          image: ${IMAGE}
+          command: ["python", "-c", "raise RuntimeError('intentional quick-start test')"]
+YAML
 
 # Remove the controlled failure after its CrashLoop notification arrives.
 kubectl -n zarf delete deployment robusta-getting-started

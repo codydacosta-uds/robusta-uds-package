@@ -25,7 +25,7 @@ variables:
     default: ""
   - name: ALERT_ENVIRONMENT
     default: "production"
-  # Empty uses the package's built-in zarf and cluster-resource Profiles.
+  # Empty uses the package's low-noise UDS Core workload-health Profile.
   - name: PROFILE_CONFIG
     default: ""
   # Internal upgrade input; new deployments configure PROFILE_CONFIG.
