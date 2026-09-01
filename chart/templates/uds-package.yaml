@@ -31,6 +31,11 @@ spec:
         selector:
           app: robusta-forwarder
         description: "Robusta forwarder Kubernetes API access"
+      - direction: Egress
+        remoteGenerated: KubeAPI
+        selector:
+          app.kubernetes.io/name: robusta-profile-compiler
+        description: "Profile compiler configuration access"
 
       # The alert relay delivers to supported external webhook destinations.
       - direction: Egress

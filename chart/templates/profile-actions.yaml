@@ -1,0 +1,14 @@
+# Copyright 2026 Defense Unicorns
+# SPDX-License-Identifier: AGPL-3.0-or-later OR LicenseRef-Defense-Unicorns-Commercial
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: robusta-profile-actions
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/name: robusta-profile-actions
+data:
+  __init__.py: |
+{{ .Files.Get "files/profile_actions_init.py" | indent 4 }}
+  ownership.py: |
+{{ .Files.Get "files/profile_ownership.py" | indent 4 }}

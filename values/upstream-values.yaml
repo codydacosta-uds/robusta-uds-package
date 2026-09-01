@@ -1,6 +1,6 @@
 # Copyright 2025 Defense Unicorns
 # SPDX-License-Identifier: AGPL-3.0-or-later OR LicenseRef-Defense-Unicorns-Commercial
-# Base Robusta values. Copy and supply environment-specific values separately.
+# Base Robusta 0.48.0 values. Profile users do not configure this file.
 clusterName: ###ZARF_VAR_CLUSTER_NAME###
 alertEnvironment: ###ZARF_VAR_ALERT_ENVIRONMENT###
 
@@ -10,29 +10,45 @@ globalConfig:
 
 enablePrometheusStack: false
 enableHolmesGPT: false
+enablePlatformPlaybooks: false
 
-# Define one or more named sinks in an environment values file. URLs and
-# credentials belong in deployment-time configuration, never this public base file.
+# Profiles generate every active Kubernetes playbook. Disable upstream
+# unscoped defaults so health findings cannot bypass Profile scope or collect
+# logs/Prometheus graphs unexpectedly.
+priorityBuiltinPlaybooks: []
+builtinPlaybooks: []
+customPlaybooks: []
+playbookRepos:
+  uds_profile_actions:
+    url: file:///opt/uds-profile-actions
+    pip_install: false
+
+# Robusta 0.48.0 cannot JSON-serialize KubernetesDiffBlock reliably. Changes
+# therefore use its native text transport; health findings use native JSON.
 sinksConfig:
   - webhook_sink:
-      name: alert-relay
-      url: http://robusta-alert-relay.robusta.svc.cluster.local/
+      name: profile-change-relay
+      url: http://robusta-alert-relay.robusta.svc.cluster.local/change
       format: text
       size_limit: 12000
+  - webhook_sink:
+      name: profile-health-relay
+      url: http://robusta-alert-relay.robusta.svc.cluster.local/health
+      format: json
+      size_limit: 12000
 
-# Observe cluster-wide. Alerts occur only for explicit customPlaybooks supplied
-# in a second values file.
+# Kubewatch observes supported native resources cluster-wide. Generated Robusta
+# scopes decide which events become findings. Secret observation remains an
+# explicit package-level security gate.
 kubewatch:
   config:
     namespace: ""
     resource:
-      # Native types jointly supported by current Kubewatch and Robusta.
       clusterrole: true
       clusterrolebinding: true
       configmap: true
       daemonset: true
       deployment: true
-      # Event updates reach the runner but do not produce change findings in 0.48.0.
       event: false
       hpa: true
       ingress: true
@@ -42,21 +58,33 @@ kubewatch:
       persistentvolume: true
       pod: true
       replicaset: true
+      secret: ###ZARF_VAR_WATCH_SECRETS###
       serviceaccount: true
       services: true
       statefulset: true
-      # Opt-in only. The relay always redacts Secret values before external delivery.
-      secret: ###ZARF_VAR_WATCH_SECRETS###
 
-# CRD permissions are intentionally explicit. Enable only the CRD families used.
 runner:
-  # Robusta loads sink and playbook configuration at process startup. Bump this
-  # package-owned annotation when either contract changes so upgrades roll safely.
   annotations:
-    uds.dev/alert-config-version: alert-rules-v1
-  # This standalone package does not use Robusta SaaS. Disable its periodic
-  # usage telemetry so the runner does not call an unavailable external API.
+    uds.dev/alert-config-version: profiles-v3
+  # Robusta loads this package-managed action before activating generated
+  # Profile health playbooks. It resolves Pod controller ownership and fails
+  # closed when ownership cannot be verified.
+  extraVolumes:
+    - name: profile-actions
+      configMap:
+        name: robusta-profile-actions
+        items:
+          - key: __init__.py
+            path: uds_profile_actions/__init__.py
+          - key: ownership.py
+            path: uds_profile_actions/ownership.py
+  extraVolumeMounts:
+    - name: profile-actions
+      mountPath: /opt/uds-profile-actions
+      readOnly: true
   additional_env_vars:
+    - name: PYTHONPATH
+      value: /opt/uds-profile-actions
     - name: ENABLE_TELEMETRY
       value: "false"
   crdPermissions:
@@ -68,364 +96,3 @@ runner:
     gatewayApi: false
     velero: false
     externalSecrets: false
-
-
-# -----------------------------------------------------------------------------
-# COPY/UNCOMMENT STARTER: zarf namespace and all native resource rule patterns
-# -----------------------------------------------------------------------------
-# This is intentionally commented so the public base does not send alerts.
-# Replace the .invalid URL before use. Select one or more sink names in each rule.
-# The examples below use `zarf`; change namespace_prefix and optionally add
-# name_prefix to limit a rule to a single object.
-#
-# sinksConfig:
-#   - webhook_sink:
-#       name: zarf-example-webhook
-#       url: https://webhook.example.invalid/REPLACE_ME
-#       format: text
-#       size_limit: 12000
-#
-# # Copy only the rules needed for an environment, replace zarf,
-# # and apply alongside helm/values.yaml. Do not alert cluster-wide by default.
-# Define actions per resource kind and use an explicit title. Robusta 0.48.0
-# can resolve $kind to None for ConfigMap updates.
-# x-configmap-alert-actions: &configmap_alert_actions
-#   - resource_babysitter: {}
-#   - customise_finding:
-#       severity: HIGH
-#       title: "ConfigMap changed: $namespace/$name"
-# # Replace with one or more names defined in values.example.yaml.
-# x-sinks: &sinks [zarf-example-webhook]
-# x-change-filter: &change_filter
-#   ignore: [metadata.generation, metadata.resourceVersion, metadata.managedFields, status]
-#
-# customPlaybooks:
-#   - name: ConfigMapChanges
-#     triggers:
-#       - on_configmap_update:
-#           namespace_prefix: zarf
-#           change_filters:
-#             <<: *change_filter
-#             include: [data, binaryData]
-#     actions: *alert_actions
-#     sinks: *sinks
-#
-#   - name: DeploymentManifestChanges
-#     triggers:
-#       - on_deployment_update:
-#           namespace_prefix: zarf
-#           change_filters:
-#             <<: *change_filter
-#             include: [spec]
-#     actions: *alert_actions
-#     sinks: *sinks
-#
-#   - name: StatefulSetManifestChanges
-#     triggers:
-#       - on_statefulset_update:
-#           namespace_prefix: zarf
-#           change_filters:
-#             <<: *change_filter
-#             include: [spec]
-#     actions: *alert_actions
-#     sinks: *sinks
-#
-#   - name: DaemonSetManifestChanges
-#     triggers:
-#       - on_daemonset_update:
-#           namespace_prefix: zarf
-#           change_filters:
-#             <<: *change_filter
-#             include: [spec]
-#     actions: *alert_actions
-#     sinks: *sinks
-#
-#   - name: ServiceChanges
-#     triggers:
-#       - on_service_update:
-#           namespace_prefix: zarf
-#           change_filters:
-#             <<: *change_filter
-#             include: [spec]
-#     actions: *alert_actions
-#     sinks: *sinks
-#
-#   - name: IngressChanges
-#     triggers:
-#       - on_ingress_update:
-#           namespace_prefix: zarf
-#           change_filters:
-#             <<: *change_filter
-#             include: [spec]
-#     actions: *alert_actions
-#     sinks: *sinks
-#
-#
-#   - name: HorizontalPodAutoscalerChanges
-#     triggers:
-#       - on_horizontalpodautoscaler_update:
-#           namespace_prefix: zarf
-#           change_filters:
-#             <<: *change_filter
-#             include: [spec]
-#     actions: *alert_actions
-#     sinks: *sinks
-#
-#   - name: JobChanges
-#     triggers:
-#       - on_job_update:
-#           namespace_prefix: zarf
-#           change_filters:
-#             <<: *change_filter
-#             include: [spec]
-#     actions: *alert_actions
-#     sinks: *sinks
-#
-#   - name: PodChanges
-#     triggers:
-#       - on_pod_update:
-#           namespace_prefix: zarf
-#           change_filters:
-#             <<: *change_filter
-#             include: [spec]
-#     actions: *alert_actions
-#     sinks: *sinks
-#
-#   - name: ReplicaSetChanges
-#     triggers:
-#       - on_replicaset_update:
-#           namespace_prefix: zarf
-#           change_filters:
-#             <<: *change_filter
-#             include: [spec]
-#     actions: *alert_actions
-#     sinks: *sinks
-#
-#   - name: ServiceAccountChanges
-#     triggers:
-#       - on_serviceaccount_update:
-#           namespace_prefix: zarf
-#           change_filters:
-#             <<: *change_filter
-#             include: [automountServiceAccountToken, imagePullSecrets]
-#     actions: *alert_actions
-#     sinks: *sinks
-#
-#   - name: NamespaceChanges
-#     triggers:
-#       - on_namespace_update:
-#           change_filters:
-#             <<: *change_filter
-#             include: [metadata.labels, metadata.annotations]
-#     actions: *alert_actions
-#     sinks: *sinks
-#
-#   - name: NodeChanges
-#     triggers:
-#       - on_node_update:
-#           change_filters:
-#             <<: *change_filter
-#             include: [metadata.labels, spec]
-#     actions: *alert_actions
-#     sinks: *sinks
-#
-#   - name: PersistentVolumeChanges
-#     triggers:
-#       - on_persistentvolume_update:
-#           change_filters:
-#             <<: *change_filter
-#             include: [spec]
-#     actions: *alert_actions
-#     sinks: *sinks
-#
-#   - name: ClusterRoleChanges
-#     triggers:
-#       - on_clusterrole_update:
-#           change_filters:
-#             <<: *change_filter
-#             include: [rules, metadata.labels, metadata.annotations]
-#     actions: *alert_actions
-#     sinks: *sinks
-#
-#   - name: ClusterRoleBindingChanges
-#     triggers:
-#       - on_clusterrolebinding_update:
-#           change_filters:
-#             <<: *change_filter
-#             include: [roleRef, subjects, metadata.labels, metadata.annotations]
-#     actions: *alert_actions
-#     sinks: *sinks
-#
-# # Secrets are intentionally not enabled in helm/values.yaml. To use this rule, set
-# # kubewatch.config.resource.secret: true and review the upstream redaction behavior.
-# #  - name: SecretChanges
-# #    triggers:
-# #      - on_secret_update:
-# #          namespace_prefix: zarf
-# #          change_filters:
-# #            <<: *change_filter
-# #            include: [metadata.labels, metadata.annotations, type]
-# #    actions: *alert_actions
-# #    sinks: *sinks
-
-
-# Internal playbooks normalize native Kubernetes updates for the rule-aware
-# relay. Users configure package-defined alert rules and named sinks, not these playbooks.
-x-relay-sink: &relay_sink [alert-relay]
-x-change-filter: &change_filter
-  ignore: [metadata.generation, metadata.resourceVersion, metadata.managedFields, status]
-
-customPlaybooks:
-  - name: RuleBasedConfigMapChanges
-    triggers:
-      - on_configmap_update:
-          change_filters: { <<: *change_filter, include: [data, binaryData] }
-    actions:
-      - resource_babysitter: {}
-      - customise_finding: { severity: HIGH, title: "ConfigMap changed: $namespace/$name" }
-    sinks: *relay_sink
-
-  - name: RuleBasedDaemonSetChanges
-    triggers:
-      - on_daemonset_update:
-          change_filters: { <<: *change_filter, include: [spec] }
-    actions:
-      - resource_babysitter: {}
-      - customise_finding: { severity: HIGH, title: "DaemonSet changed: $namespace/$name" }
-    sinks: *relay_sink
-
-  - name: RuleBasedDeploymentChanges
-    triggers:
-      - on_deployment_update:
-          change_filters: { <<: *change_filter, include: [spec] }
-    actions:
-      - resource_babysitter: {}
-      - customise_finding: { severity: HIGH, title: "Deployment changed: $namespace/$name" }
-    sinks: *relay_sink
-
-  - name: RuleBasedHorizontalPodAutoscalerChanges
-    triggers:
-      - on_horizontalpodautoscaler_update:
-          change_filters: { <<: *change_filter, include: [spec] }
-    actions:
-      - resource_babysitter: {}
-      - customise_finding: { severity: HIGH, title: "HorizontalPodAutoscaler changed: $namespace/$name" }
-    sinks: *relay_sink
-
-  - name: RuleBasedIngressChanges
-    triggers:
-      - on_ingress_update:
-          change_filters: { <<: *change_filter, include: [spec] }
-    actions:
-      - resource_babysitter: {}
-      - customise_finding: { severity: HIGH, title: "Ingress changed: $namespace/$name" }
-    sinks: *relay_sink
-
-  - name: RuleBasedJobChanges
-    triggers:
-      - on_job_update:
-          change_filters: { <<: *change_filter, include: [spec] }
-    actions:
-      - resource_babysitter: {}
-      - customise_finding: { severity: HIGH, title: "Job changed: $namespace/$name" }
-    sinks: *relay_sink
-
-  - name: RuleBasedPodChanges
-    triggers:
-      - on_pod_update:
-          change_filters: { <<: *change_filter, include: [spec] }
-    actions:
-      - resource_babysitter: {}
-      - customise_finding: { severity: HIGH, title: "Pod changed: $namespace/$name" }
-    sinks: *relay_sink
-
-  - name: RuleBasedReplicaSetChanges
-    triggers:
-      - on_replicaset_update:
-          change_filters: { <<: *change_filter, include: [spec] }
-    actions:
-      - resource_babysitter: {}
-      - customise_finding: { severity: HIGH, title: "ReplicaSet changed: $namespace/$name" }
-    sinks: *relay_sink
-
-  - name: RuleBasedSecretChanges
-    triggers:
-      - on_secret_update:
-          # Kubewatch intentionally does not emit Secret data-value changes.
-          change_filters: { <<: *change_filter, include: [metadata.labels, metadata.annotations, type] }
-    actions:
-      - resource_babysitter: {}
-      - customise_finding: { severity: HIGH, title: "Secret changed: $namespace/$name" }
-    sinks: *relay_sink
-
-  - name: RuleBasedServiceChanges
-    triggers:
-      - on_service_update:
-          change_filters: { <<: *change_filter, include: [spec] }
-    actions:
-      - resource_babysitter: {}
-      - customise_finding: { severity: HIGH, title: "Service changed: $namespace/$name" }
-    sinks: *relay_sink
-
-  - name: RuleBasedServiceAccountChanges
-    triggers:
-      - on_serviceaccount_update:
-          change_filters: { <<: *change_filter, include: [automountServiceAccountToken, imagePullSecrets, metadata.labels, metadata.annotations] }
-    actions:
-      - resource_babysitter: {}
-      - customise_finding: { severity: HIGH, title: "ServiceAccount changed: $namespace/$name" }
-    sinks: *relay_sink
-
-  - name: RuleBasedStatefulSetChanges
-    triggers:
-      - on_statefulset_update:
-          change_filters: { <<: *change_filter, include: [spec] }
-    actions:
-      - resource_babysitter: {}
-      - customise_finding: { severity: HIGH, title: "StatefulSet changed: $namespace/$name" }
-    sinks: *relay_sink
-
-  - name: RuleBasedClusterRoleChanges
-    triggers:
-      - on_clusterrole_update:
-          change_filters: { <<: *change_filter, include: [rules, metadata.labels, metadata.annotations] }
-    actions:
-      - resource_babysitter: {}
-      - customise_finding: { severity: HIGH, title: "ClusterRole changed: cluster-scoped/$name" }
-    sinks: *relay_sink
-
-  - name: RuleBasedClusterRoleBindingChanges
-    triggers:
-      - on_clusterrolebinding_update:
-          change_filters: { <<: *change_filter, include: [roleRef, subjects, metadata.labels, metadata.annotations] }
-    actions:
-      - resource_babysitter: {}
-      - customise_finding: { severity: HIGH, title: "ClusterRoleBinding changed: cluster-scoped/$name" }
-    sinks: *relay_sink
-
-  - name: RuleBasedNamespaceChanges
-    triggers:
-      - on_namespace_update:
-          change_filters: { <<: *change_filter, include: [metadata.labels, metadata.annotations] }
-    actions:
-      - resource_babysitter: {}
-      - customise_finding: { severity: HIGH, title: "Namespace changed: cluster-scoped/$name" }
-    sinks: *relay_sink
-
-  - name: RuleBasedNodeChanges
-    triggers:
-      - on_node_update:
-          change_filters: { <<: *change_filter, include: [metadata.labels, metadata.annotations, spec] }
-    actions:
-      - resource_babysitter: {}
-      - customise_finding: { severity: HIGH, title: "Node changed: cluster-scoped/$name" }
-    sinks: *relay_sink
-
-  - name: RuleBasedPersistentVolumeChanges
-    triggers:
-      - on_persistentvolume_update:
-          change_filters: { <<: *change_filter, include: [spec, metadata.labels, metadata.annotations] }
-    actions:
-      - resource_babysitter: {}
-      - customise_finding: { severity: HIGH, title: "PersistentVolume changed: cluster-scoped/$name" }
-    sinks: *relay_sink

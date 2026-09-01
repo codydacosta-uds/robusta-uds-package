@@ -8,7 +8,12 @@ additionalNetworkAllow: []
 alertEnvironment: production
 watchSecrets: false
 
-# JSON is used so the complete alert-rule collection can be supplied through the
-# Zarf ALERT_CONFIG variable without requiring users to write Robusta playbooks.
-alertConfig: >-
-  {"defaultSinks":["alerts-default"],"sinks":{"alerts-default":{"type":"mattermost","secretKey":"alerts-default-url"}},"namespacedAlertRules":[{"name":"zarf-namespaced-resources","enabled":true,"namespaces":["zarf"],"resources":["ConfigMap","DaemonSet","Deployment","HorizontalPodAutoscaler","Ingress","Job","Pod","ReplicaSet","Service","ServiceAccount","StatefulSet"]}],"clusterAlertRules":[{"name":"cluster-scoped-resources","enabled":true,"resources":["ClusterRole","ClusterRoleBinding","Namespace","Node","PersistentVolume"]}]}
+# User Profile JSON. Empty uses the built-in Profiles below.
+profileConfig: ""
+
+# Accepted internally so existing deployments can be upgraded without changing
+# their package variables. New deployments use Profiles.
+alertConfig: ""
+
+defaultProfileConfig: >-
+  {"schemaVersion":1,"defaultDestinations":["alerts-default"],"destinations":{"alerts-default":{"type":"mattermost","secretKey":"alerts-default-url"}},"profiles":[{"name":"zarf-resources","scope":{"namespaces":["zarf"]},"resources":{"configmap":{},"daemonset":{},"deployment":{},"horizontalpodautoscaler":{},"ingress":{},"job":{},"pod":{},"replicaset":{},"service":{},"serviceaccount":{},"statefulset":{}},"monitor":{"drift":{"include":["manifest"]}},"context":{"diff":true},"notify":{"severity":"high"}},{"name":"cluster-resources","resources":{"clusterrole":{},"clusterrolebinding":{},"namespace":{},"node":{},"persistentvolume":{}},"monitor":{"drift":{"include":["manifest"]}},"context":{"diff":true},"notify":{"severity":"high"}}]}

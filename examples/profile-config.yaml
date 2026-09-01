@@ -1,0 +1,47 @@
+# Copyright 2026 Defense Unicorns
+# SPDX-License-Identifier: AGPL-3.0-or-later OR LicenseRef-Defense-Unicorns-Commercial
+
+schemaVersion: 1
+
+defaultDestinations:
+  - alerts-default
+
+destinations:
+  alerts-default:
+    type: mattermost
+    secretKey: alerts-default-url
+
+profiles:
+  - name: application-production
+    enabled: true
+    scope:
+      namespaces:
+        - application
+      labels:
+        app.kubernetes.io/part-of: application
+    resources:
+      deployment:
+        names:
+          - application-web
+          - application-worker
+      statefulset:
+        names:
+          - application-data
+      configmap: {}
+      job: {}
+    # Applicable health monitoring is automatic. Changes are intentionally
+    # explicit because routine deployments should not create alert noise.
+    monitor:
+      changes:
+        events: [create, delete]
+      # Drift means a qualifying live update from the previously observed
+      # in-cluster state. It is not a comparison with a Git or Terraform source.
+      drift:
+        include: [image, replicas, resources, environment, configuration]
+    context:
+      diff: true
+      kubernetesEvents: true
+    notify:
+      severity: high
+      destinations:
+        - alerts-default

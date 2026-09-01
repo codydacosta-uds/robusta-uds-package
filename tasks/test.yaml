@@ -4,9 +4,12 @@
 tasks:
   - name: all
     actions:
-      - cmd: python3 -m unittest tests/test_relay_rules.py
+      - cmd: python3 -m unittest tests/test_profile_model.py tests/test_profile_compiler.py tests/test_profile_ownership.py tests/test_relay_rules.py
       - task: health-check
       - cmd: bash tests/robusta.test.sh
+      - cmd: bash tests/profile-v2-semantic.test.sh
+      - cmd: bash tests/profile-default-health.test.sh
+      - cmd: bash tests/profile-v2-health.test.sh
 
 
   # Ensure application deploys successfully and becomes available

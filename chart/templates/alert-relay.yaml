@@ -1,5 +1,6 @@
 # Copyright 2025 Defense Unicorns
 # SPDX-License-Identifier: AGPL-3.0-or-later OR LicenseRef-Defense-Unicorns-Commercial
+{{- $profileConfig := coalesce .Values.profileConfig .Values.alertConfig .Values.defaultProfileConfig }}
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -10,7 +11,13 @@ metadata:
 data:
   relay.py: |
 {{ .Files.Get "files/relay.py" | indent 4 }}
-  rules.json: {{ .Values.alertConfig | quote }}
+  profile_model.py: |
+{{ .Files.Get "files/profile_model.py" | indent 4 }}
+  profile_compiler.py: |
+{{ .Files.Get "files/profile_compiler.py" | indent 4 }}
+  profile_ownership.py: |
+{{ .Files.Get "files/profile_ownership.py" | indent 4 }}
+  profiles.json: {{ $profileConfig | quote }}
 
 ---
 apiVersion: apps/v1
@@ -30,7 +37,7 @@ spec:
       labels:
         app.kubernetes.io/name: robusta-alert-relay
       annotations:
-        checksum/relay-config: {{ printf "%s\n%s" (.Files.Get "files/relay.py") .Values.alertConfig | sha256sum }}
+        checksum/relay-config: {{ printf "%s\n%s\n%s" (.Files.Get "files/relay.py") (.Files.Get "files/profile_model.py") $profileConfig | sha256sum }}
     spec:
       automountServiceAccountToken: false
       containers:
@@ -41,7 +48,7 @@ spec:
             - name: ALERT_ENVIRONMENT
               value: {{ .Values.alertEnvironment | quote }}
             - name: ALERT_CONFIG_PATH
-              value: /app/rules.json
+              value: /app/profiles.json
             - name: SINK_DIRECTORY
               value: /etc/robusta-alert-webhooks
           ports:

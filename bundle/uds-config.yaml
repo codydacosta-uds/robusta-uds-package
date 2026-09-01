@@ -1,7 +1,7 @@
 # Copyright 2024 Defense Unicorns
 # SPDX-License-Identifier: AGPL-3.0-or-later OR LicenseRef-Defense-Unicorns-Commercial
 
-# Exercise the documented multi-line uds-config input path in CI.
+# Test-only Profiles. Production examples live under examples/.
 variables:
   robusta:
     CLUSTER_NAME: "robusta-test"
@@ -9,32 +9,89 @@ variables:
     ROBUSTA_SIGNING_KEY: "test-signing-key-no-credentials"
     ALERT_ENVIRONMENT: "test"
     WATCH_SECRETS: "false"
-    ALERT_CONFIG: |-
+    PROFILE_CONFIG: |-
       {
-        "defaultSinks": ["alerts-default", "alerts-slack"],
-        "sinks": {
-          "alerts-default": {
-            "type": "mattermost",
-            "secretKey": "alerts-default-url"
-          },
-          "alerts-slack": {
-            "type": "slack",
-            "secretKey": "alerts-slack-url"
-          }
+        "schemaVersion": 1,
+        "defaultDestinations": ["alerts-default", "alerts-slack"],
+        "destinations": {
+          "alerts-default": {"type": "mattermost", "secretKey": "alerts-default-url"},
+          "alerts-slack": {"type": "slack", "secretKey": "alerts-slack-url"}
         },
-        "namespacedAlertRules": [
+        "profiles": [
           {
-            "name": "zarf-namespaced-resources",
-            "enabled": true,
-            "namespaces": ["zarf"],
-            "resources": ["ConfigMap", "DaemonSet", "Deployment", "HorizontalPodAutoscaler", "Ingress", "Job", "Pod", "ReplicaSet", "Service", "ServiceAccount", "StatefulSet"]
-          }
-        ],
-        "clusterAlertRules": [
+            "name": "semantic-drift-and-lifecycle",
+            "scope": {"namespaces": ["zarf"], "labels": {"monitor": "profile-v2"}},
+            "resources": {"configmap": {}, "deployment": {}},
+            "monitor": {
+              "changes": {"events": ["create", "delete"]},
+              "drift": {"include": ["image", "configuration"]},
+              "health": {"defaults": false}
+            },
+            "context": {"diff": true},
+            "notify": {"severity": "high"}
+          },
           {
-            "name": "cluster-scoped-resources",
-            "enabled": true,
-            "resources": ["ClusterRole", "ClusterRoleBinding", "Namespace", "Node", "PersistentVolume"]
+            "name": "other-zarf-resources",
+            "scope": {"namespaces": ["zarf"]},
+            "resources": {
+              "daemonset": {}, "horizontalpodautoscaler": {}, "ingress": {}, "job": {},
+              "pod": {}, "replicaset": {}, "service": {}, "serviceaccount": {}, "statefulset": {}
+            },
+            "monitor": {"drift": {"include": ["manifest"]}, "health": {"defaults": false}},
+            "context": {"diff": true},
+            "notify": {"severity": "high"}
+          },
+          {
+            "name": "workload-health",
+            "scope": {"namespaces": ["zarf"], "labels": {"monitor": "profile-v2-health"}},
+            "resources": {"pod": {}, "job": {}},
+            "monitor": {
+              "health": {
+                "crashLoop": true,
+                "imagePullFailure": true,
+                "oomKill": true,
+                "jobFailure": true,
+                "podEviction": true
+              }
+            },
+            "context": {"kubernetesEvents": true},
+            "notify": {"severity": "high"}
+          },
+          {
+            "name": "owned-default-health",
+            "scope": {"namespaces": ["zarf"]},
+            "resources": {
+              "deployment": {"names": ["baseline-crash", "baseline-image", "baseline-oom", "baseline-evict"]},
+              "statefulset": {"names": ["baseline-stateful"]},
+              "daemonset": {"names": ["baseline-daemon"]},
+              "replicaset": {"names": ["baseline-replica"]},
+              "job": {"names": ["baseline-job"]}
+            },
+            "notify": {"severity": "high"}
+          },
+          {
+            "name": "health-oom-optout",
+            "scope": {"namespaces": ["zarf"]},
+            "resources": {"deployment": {"names": ["optout-oom"]}},
+            "monitor": {"health": {"oomKill": false}},
+            "notify": {"severity": "high"}
+          },
+          {
+            "name": "cluster-resources",
+            "resources": {"clusterrolebinding": {}, "namespace": {}, "node": {}, "persistentvolume": {}},
+            "monitor": {"drift": {"include": ["manifest"]}},
+            "context": {"diff": true},
+            "notify": {"severity": "high"}
+          },
+          {
+            "name": "cluster-permission-drift",
+            "resources": {"clusterrole": {"names": ["profile-v2-role"]}},
+            "monitor": {
+              "changes": {"events": ["create", "delete"]},
+              "drift": {"include": ["permissions"]}
+            },
+            "context": {"diff": true},
+            "notify": {"severity": "high"}
           }
         ]
       }

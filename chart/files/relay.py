@@ -5,27 +5,25 @@ import difflib
 import json
 import os
 import re
+import sys
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
 from urllib.parse import urlparse
 from urllib.request import Request, urlopen
 
+sys.path.insert(0, str(Path(__file__).parent))
+from profile_model import (  # noqa: E402
+    CLUSTER_RESOURCES, NAMESPACED_RESOURCES, SUPPORTED_RESOURCES, WORKLOADS,
+    matching_categories, normalize_config,
+)
+
 ENVIRONMENT = os.environ.get("ALERT_ENVIRONMENT", "production")
-CONFIG_PATH = Path(os.environ.get("ALERT_CONFIG_PATH", "/app/rules.json"))
+CONFIG_PATH = Path(os.environ.get("ALERT_CONFIG_PATH", "/app/profiles.json"))
 SINK_DIRECTORY = Path(os.environ.get("SINK_DIRECTORY", "/etc/robusta-alert-webhooks"))
 YELLOW = "#f2c744"
 RED = "#d24b4b"
-
-NAMESPACED_RESOURCES = {
-    "ConfigMap", "DaemonSet", "Deployment", "HorizontalPodAutoscaler", "Ingress",
-    "Job", "Pod", "ReplicaSet", "Secret", "Service", "ServiceAccount", "StatefulSet",
-}
-CLUSTER_RESOURCES = {"ClusterRole", "ClusterRoleBinding", "Namespace", "Node", "PersistentVolume"}
-SUPPORTED_RESOURCES = NAMESPACED_RESOURCES | CLUSTER_RESOURCES
 KIND_NAMES = {re.sub(r"[^a-z]", "", kind.lower()): kind for kind in SUPPORTED_RESOURCES}
-WORKLOADS = {"Deployment", "StatefulSet", "DaemonSet", "Pod", "ReplicaSet", "Job"}
-DNS_LABEL = re.compile(r"^[a-z0-9](?:[-a-z0-9.]*[a-z0-9])?$")
-CONFIG_NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]*$")
+PROFILE_MARKER = re.compile(r"^UDS_PROFILE_V2\|([^|]+)\|(change|drift|health)\|([^|]+)\|([^|]+)\|([^|]+)\|(.+)$")
 
 
 def value_diff(before, after):
@@ -41,6 +39,10 @@ def display_kind(value):
 
 
 def parse_title(raw_title):
+    marker = PROFILE_MARKER.fullmatch(raw_title)
+    if marker:
+        _, _, _, kind, namespace, name = marker.groups()
+        return display_kind(kind), namespace or "unknown", name
     kind, separator, resource = raw_title.partition(" changed: ")
     if separator:
         namespace, _, name = resource.partition("/")
@@ -56,88 +58,51 @@ def parse_title(raw_title):
     return "Kubernetes resource", "unknown", raw_title
 
 
-def _validate_names(values, field, available):
-    if not isinstance(values, list) or not values:
-        raise ValueError(f"{field} must be a non-empty list")
-    unknown = sorted(set(values) - set(available))
-    if unknown:
-        raise ValueError(f"{field} contains unsupported values: {', '.join(unknown)}")
+def parse_profile_marker(raw_title):
+    match = PROFILE_MARKER.fullmatch(raw_title)
+    if not match:
+        return None
+    profile, signal, operation, kind, namespace, name = match.groups()
+    return {"profile": profile, "signal": signal, "operation": operation, "kind": display_kind(kind), "namespace": namespace, "name": name}
 
 
 def validate_config(config):
-    if not isinstance(config, dict):
-        raise ValueError("alert configuration must be an object")
-    allowed = {"defaultSinks", "sinks", "namespacedAlertRules", "clusterAlertRules"}
-    unknown_fields = sorted(set(config) - allowed)
-    if unknown_fields:
-        raise ValueError(f"unknown alert configuration fields: {', '.join(unknown_fields)}")
-
-    sinks = config.get("sinks")
-    if not isinstance(sinks, dict) or not sinks:
-        raise ValueError("sinks must define at least one named sink")
-    for name, definition in sinks.items():
-        if not CONFIG_NAME.fullmatch(name) or not isinstance(definition, dict):
-            raise ValueError(f"invalid sink definition: {name}")
-        allowed_sink = {"secretKey", "type"}
-        extra = sorted(set(definition) - allowed_sink)
-        if extra or not CONFIG_NAME.fullmatch(str(definition.get("secretKey", ""))):
-            raise ValueError(f"sink {name} must contain a valid secretKey and optional type")
-        if definition.get("type", "mattermost") not in {"mattermost", "slack"}:
-            raise ValueError(f"sink {name} type must be mattermost or slack")
-
-    _validate_names(config.get("defaultSinks"), "defaultSinks", sinks)
-    seen = set()
-    for rule_type, resources, needs_namespaces in (
-        ("namespacedAlertRules", NAMESPACED_RESOURCES, True),
-        ("clusterAlertRules", CLUSTER_RESOURCES, False),
-    ):
-        rules = config.get(rule_type, [])
-        if not isinstance(rules, list):
-            raise ValueError(f"{rule_type} must be a list")
-        for rule in rules:
-            if not isinstance(rule, dict):
-                raise ValueError(f"every {rule_type} entry must be an object")
-            allowed_rule = {"name", "enabled", "resources", "sinks"} | ({"namespaces"} if needs_namespaces else set())
-            extra = sorted(set(rule) - allowed_rule)
-            if extra:
-                raise ValueError(f"alert rule has unknown fields: {', '.join(extra)}")
-            name = rule.get("name", "")
-            if not isinstance(name, str) or not CONFIG_NAME.fullmatch(name) or name in seen:
-                raise ValueError(f"alert rule names must be valid and unique: {name}")
-            seen.add(name)
-            if not isinstance(rule.get("enabled", True), bool):
-                raise ValueError(f"alert rule {name} enabled must be boolean")
-            _validate_names(rule.get("resources"), f"alert rule {name} resources", resources)
-            if needs_namespaces:
-                namespaces = rule.get("namespaces")
-                if not isinstance(namespaces, list) or not namespaces:
-                    raise ValueError(f"alert rule {name} namespaces must be a non-empty list")
-                if any(not isinstance(ns, str) or not DNS_LABEL.fullmatch(ns) for ns in namespaces):
-                    raise ValueError(f"alert rule {name} contains an invalid exact namespace")
-            if "sinks" in rule:
-                _validate_names(rule["sinks"], f"alert rule {name} sinks", sinks)
-    return config
+    return normalize_config(config)
 
 
 def load_config():
     return validate_config(json.loads(CONFIG_PATH.read_text()))
 
 
-def matching_sinks(kind, namespace, config):
+def matching_sinks(kind, namespace, config, profile_id=None, name=None):
+    config = config if config.get("schemaVersion") == 1 else validate_config(config)
     cluster_scoped = kind in CLUSTER_RESOURCES
-    rules = config["clusterAlertRules"] if cluster_scoped else config["namespacedAlertRules"]
     selected = []
-    matched_rules = []
-    for rule in rules:
-        if not rule.get("enabled", True) or kind not in rule["resources"]:
+    matched_profiles = []
+    for profile in config["profiles"]:
+        if not profile["enabled"] or (profile_id and profile["id"] != profile_id):
             continue
-        if not cluster_scoped and namespace not in rule["namespaces"]:
+        resource = next((item for item in profile["resources"] if item["kind"] == kind), None)
+        if not resource:
             continue
-        matched_rules.append(rule["name"])
-        for sink in rule.get("sinks", config["defaultSinks"]):
-            if sink not in selected:
-                selected.append(sink)
-    return selected, matched_rules, cluster_scoped
+        if not cluster_scoped and namespace not in profile["scope"]["namespaces"]:
+            continue
+        if name and resource["names"] and name not in resource["names"]:
+            continue
+        matched_profiles.append(profile["name"])
+        for destination in profile["notify"]["destinations"]:
+            if destination not in selected:
+                selected.append(destination)
+    return selected, matched_profiles, cluster_scoped
+
+
+def profile_by_id(config, identity):
+    return next((profile for profile in config["profiles"] if profile["id"] == identity and profile["enabled"]), None)
+
+
+def extract_changes(message):
+    pattern = re.compile(r"(?ms)^\s*\*([^*]+)\*:\s*(.*?)\s*==>\s*(.*?)(?=\n\s*\*[^*]+\*:\s*|\Z)")
+    return [(match.group(1).strip(), match.group(2).strip(), match.group(3).strip()) for match in pattern.finditer(message)]
 
 
 def field_format(kind, path):
@@ -196,13 +161,22 @@ def section_title(kind):
     return "Manifest changes"
 
 
-def render_alert(message, color=YELLOW, rules=None, sink_type="mattermost"):
+def render_alert(message, color=YELLOW, profiles=None, sink_type="mattermost", marker=None, categories=None, severity="high"):
     lines = message.splitlines()
     incoming_title = lines[0] if lines else "Kubernetes configuration changed"
+    marker = marker or parse_profile_marker(incoming_title)
     kind, namespace, name = parse_title(incoming_title)
-    raw_title = f"{kind} changed: {namespace}/{name}"
-    pattern = re.compile(r"(?ms)^\s*\*([^*]+)\*:\s*(.*?)\s*==>\s*(.*?)(?=\n\s*\*[^*]+\*:\s*|\Z)")
-    changes = [(m.group(1).strip(), m.group(2).strip(), m.group(3).strip()) for m in pattern.finditer(message)]
+    operation = marker["operation"] if marker else "update"
+    signal = marker["signal"] if marker else "change"
+    if signal == "drift":
+        raw_title = f"Configuration drift detected: {kind} {namespace}/{name}"
+    elif operation == "create":
+        raw_title = f"{kind} created: {namespace}/{name}"
+    elif operation == "delete":
+        raw_title = f"{kind} deleted: {namespace}/{name}"
+    else:
+        raw_title = f"{kind} changed: {namespace}/{name}"
+    changes = extract_changes(message)
     if sink_type not in {"mattermost", "slack"}:
         raise ValueError(f"unsupported sink type: {sink_type}")
     bold = (lambda value: f"*{value}*") if sink_type == "slack" else (lambda value: f"**{value}**")
@@ -216,7 +190,9 @@ def render_alert(message, color=YELLOW, rules=None, sink_type="mattermost"):
             rendered_changes.append(f"{bold(f'{label}:')} {shown_path}\n{code_fence}\n{value_diff(before, after)}\n```")
     if rendered_changes:
         change_text = "\n\n".join(rendered_changes)
-        summary = f"{len(changes)} manifest {'change' if len(changes) == 1 else 'changes'}"
+        summary = f"{len(changes)} observed configuration {'difference' if len(changes) == 1 else 'differences'}"
+    elif operation in {"create", "delete"}:
+        change_text, summary = f"_{kind} {operation} observed._", f"Resource {operation}d"
     else:
         change_text, summary = "_Update detected; no field diff was available._", "Resource updated"
     scope = "Cluster" if color == RED else "Namespaced"
@@ -226,53 +202,153 @@ def render_alert(message, color=YELLOW, rules=None, sink_type="mattermost"):
         {"title": "Resource", "value": name, "short": True},
         {"title": "Kind", "value": kind, "short": True},
         {"title": "Scope", "value": scope, "short": True},
-        {"title": "Severity", "value": "Warning", "short": True},
+        {"title": "Severity", "value": severity.title(), "short": True},
     ]
-    if rules:
-        fields.append({"title": "Alert rule", "value": ", ".join(rules), "short": False})
+    if profiles:
+        fields.append({"title": "Profile", "value": ", ".join(profiles), "short": False})
+    if categories:
+        fields.append({"title": "Drift category", "value": ", ".join(categories), "short": False})
     return {"attachments": [{
-        "fallback": raw_title, "color": color, "title": f"⚠️ {raw_title}",
+        "fallback": raw_title, "color": color, "title": raw_title,
         "text": f"{bold('Summary:')} {summary}\n\n{bold(section_title(kind))}\n\n{change_text[:9000]}",
-        "fields": fields, "footer": "Robusta",
+        "fields": fields, "footer": "Robusta Profile",
+    }]}
+
+
+def _safe_text(value, limit=1000):
+    text = str(value)
+    text = re.sub(r"(?i)(password|token|authorization|secret)(\s*[:=]\s*)\S+", r"\1\2[redacted]", text)
+    return text.replace("```", "'''")[:limit]
+
+
+def health_context(payload, sink_type="mattermost"):
+    """Render bounded structured context; FileBlock/log contents are ignored."""
+    sections = []
+    bold = (lambda value: f"*{value}*") if sink_type == "slack" else (lambda value: f"**{value}**")
+    for enrichment in payload.get("enrichments") or []:
+        if not isinstance(enrichment, dict):
+            continue
+        title = _safe_text(enrichment.get("title") or "Health context", 120)
+        details = []
+        for block in enrichment.get("blocks") or []:
+            if not isinstance(block, dict) or "contents" in block or "filename" in block:
+                continue
+            if isinstance(block.get("rows"), list):
+                headers = [str(item) for item in block.get("headers") or []]
+                for row in block["rows"][:6]:
+                    cells = list(row) if isinstance(row, (list, tuple)) else [row]
+                    if headers:
+                        details.append(", ".join(f"{headers[index]}: {_safe_text(value, 240)}" for index, value in enumerate(cells[:len(headers)])))
+                    else:
+                        details.append(", ".join(_safe_text(value, 240) for value in cells))
+            elif block.get("text"):
+                details.append(_safe_text(block["text"], 1200))
+            elif isinstance(block.get("items"), list):
+                details.extend(_safe_text(item, 300) for item in block["items"][:6])
+        if details:
+            sections.append(f"{bold(title)}\n" + "\n".join(f"- {detail}" for detail in details))
+    return "\n\n".join(sections)[:3500]
+
+
+def render_health(payload, profile, marker, sink_type="mattermost"):
+    if sink_type not in {"mattermost", "slack"}:
+        raise ValueError(f"unsupported destination type: {sink_type}")
+    bold = (lambda value: f"*{value}*") if sink_type == "slack" else (lambda value: f"**{value}**")
+    subject = payload.get("subject") or {}
+    kind = marker["kind"]
+    namespace = marker["namespace"] or subject.get("namespace") or "unknown"
+    name = marker["name"] or subject.get("name") or "unknown"
+    signal_names = {"crashLoop": "Crash loop", "imagePullFailure": "Image pull failure", "oomKill": "Out-of-memory kill", "jobFailure": "Job failure", "podEviction": "Pod eviction"}
+    signal = signal_names.get(marker["operation"], marker["operation"])
+    description = _safe_text(payload.get("description") or "Kubernetes health failure detected.", 3000)
+    context = health_context(payload, sink_type)
+    fields = [
+        {"title": "Environment", "value": ENVIRONMENT, "short": True},
+        {"title": "Namespace", "value": namespace, "short": True},
+        {"title": "Resource", "value": name, "short": True},
+        {"title": "Kind", "value": kind, "short": True},
+        {"title": "Health signal", "value": signal, "short": True},
+        {"title": "Severity", "value": profile["notify"]["severity"].title(), "short": True},
+        {"title": "Profile", "value": profile["name"], "short": False},
+    ]
+    title = f"{signal}: {kind} {namespace}/{name}"
+    return {"attachments": [{
+        "fallback": title, "color": RED, "title": title,
+        "text": f"{bold('Summary:')} {description}" + (f"\n\n{context}" if context else ""), "fields": fields,
+        "footer": "Robusta Profile",
     }]}
 
 
 def sink_url(config, sink_name):
-    secret_key = config["sinks"][sink_name]["secretKey"]
+    config = config if config.get("schemaVersion") == 1 else validate_config(config)
+    secret_key = config["destinations"][sink_name]["secretKey"]
     path = SINK_DIRECTORY / secret_key
     try:
         url = path.read_text().strip()
     except OSError as error:
-        raise ValueError(f"sink {sink_name} secret key {secret_key} is unavailable") from error
+        raise ValueError(f"destination {sink_name} secret key {secret_key} is unavailable") from error
     parsed = urlparse(url)
     if parsed.scheme not in {"http", "https"} or not parsed.netloc:
-        raise ValueError(f"sink {sink_name} does not contain a valid HTTP(S) URL")
+        raise ValueError(f"destination {sink_name} does not contain a valid HTTP(S) URL")
     return url
+
+
+def route_change(message, config):
+    first_line = message.splitlines()[0] if message else ""
+    marker = parse_profile_marker(first_line)
+    kind, namespace, name = parse_title(first_line)
+    if kind not in SUPPORTED_RESOURCES:
+        raise ValueError(f"unsupported resource kind received: {kind}")
+    profile = profile_by_id(config, marker["profile"]) if marker else None
+    destinations, profiles, cluster_scoped = matching_sinks(kind, namespace, config, marker["profile"] if marker else None, name)
+    categories = []
+    if marker and marker["signal"] == "drift":
+        if not profile:
+            return [], None
+        paths = [path for path, _, _ in extract_changes(message)]
+        categories = matching_categories(kind, paths, profile["monitor"]["drift"]["include"])
+        if not categories:
+            return [], None
+    severity = profile["notify"]["severity"] if profile else "high"
+    rendered_message = message
+    if profile and marker and marker["signal"] == "drift" and not profile["context"]["diff"]:
+        rendered_message = first_line
+    alerts = [(destination, render_alert(rendered_message, RED if cluster_scoped else YELLOW, profiles, config["destinations"][destination]["type"], marker, categories, severity)) for destination in destinations]
+    return alerts, f"{kind} {namespace}/{name}"
+
+
+def route_health(payload, config):
+    marker = parse_profile_marker(str(payload.get("title", "")))
+    if not marker or marker["signal"] != "health":
+        return [], None
+    profile = profile_by_id(config, marker["profile"])
+    if not profile:
+        return [], None
+    alerts = [(destination, render_health(payload, profile, marker, config["destinations"][destination]["type"])) for destination in profile["notify"]["destinations"]]
+    return alerts, f"{marker['kind']} {marker['namespace']}/{marker['name']}"
 
 
 class Relay(BaseHTTPRequestHandler):
     def do_POST(self):
         length = int(self.headers.get("Content-Length", "0"))
-        message = self.rfile.read(length).decode("utf-8", errors="replace").strip()
+        body = self.rfile.read(length).decode("utf-8", errors="replace").strip()
         try:
             config = load_config()
-            kind, namespace, _ = parse_title(message.splitlines()[0] if message else "")
-            if kind not in SUPPORTED_RESOURCES:
-                raise ValueError(f"unsupported resource kind received: {kind}")
-            sinks, rules, cluster_scoped = matching_sinks(kind, namespace, config)
-            if not sinks:
-                print(f"Dropped unmatched event: {kind} {namespace}", flush=True)
+            if self.path.rstrip("/") == "/health":
+                alerts, subject = route_health(json.loads(body), config)
+            else:
+                alerts, subject = route_change(body, config)
+            if not alerts:
+                print(f"Dropped unmatched Profile event: {subject or 'unknown'}", flush=True)
                 self.send_response(204)
                 self.end_headers()
                 return
-            for sink in sinks:
-                sink_type = config["sinks"][sink].get("type", "mattermost")
-                alert = render_alert(message, RED if cluster_scoped else YELLOW, rules, sink_type)
-                request = Request(sink_url(config, sink), data=json.dumps(alert).encode(), headers={"Content-Type": "application/json"})
+            for destination, alert in alerts:
+                request = Request(sink_url(config, destination), data=json.dumps(alert).encode(), headers={"Content-Type": "application/json"})
                 with urlopen(request, timeout=10) as response:
                     if not 200 <= response.status < 300:
-                        raise RuntimeError(f"sink {sink} returned {response.status}")
-                print(f"Delivered [{sink}]: {alert['attachments'][0]['fallback']}", flush=True)
+                        raise RuntimeError(f"destination {destination} returned {response.status}")
+                print(f"Delivered [{destination}]: {alert['attachments'][0]['fallback']}", flush=True)
             self.send_response(204)
         except Exception as error:
             print(f"Alert delivery failed: {error}", flush=True)
@@ -285,7 +361,8 @@ class Relay(BaseHTTPRequestHandler):
 
 def main():
     config = load_config()
-    print(f"Loaded {len(config['namespacedAlertRules'])} namespaced and {len(config['clusterAlertRules'])} cluster alert rules", flush=True)
+    enabled = sum(1 for profile in config["profiles"] if profile["enabled"])
+    print(f"Loaded {enabled} enabled Profile definitions", flush=True)
     HTTPServer(("0.0.0.0", 8080), Relay).serve_forever()
 
 

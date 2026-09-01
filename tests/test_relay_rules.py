@@ -12,7 +12,7 @@ spec = importlib.util.spec_from_file_location("relay", ROOT / "chart/files/relay
 relay = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(relay)
 
-CONFIG = {
+LEGACY_CONFIG = {
     "defaultSinks": ["alerts-default"],
     "sinks": {
         "alerts-default": {"type": "mattermost", "secretKey": "alerts-default-url"},
@@ -38,6 +38,7 @@ CONFIG = {
         }
     ],
 }
+CONFIG = relay.validate_config(LEGACY_CONFIG)
 
 PATHS = {
     "ConfigMap": "data.application.yaml",
@@ -82,10 +83,11 @@ EXPECTED_FORMAT = {
 
 class RelayRulesTest(unittest.TestCase):
     def test_configuration_is_valid(self):
-        self.assertIs(relay.validate_config(CONFIG), CONFIG)
-        default_type = json.loads(json.dumps(CONFIG))
+        self.assertEqual(CONFIG["schemaVersion"], 1)
+        self.assertEqual(len(CONFIG["profiles"]), 3)
+        default_type = json.loads(json.dumps(LEGACY_CONFIG))
         default_type["sinks"]["alerts-default"].pop("type")
-        self.assertIs(relay.validate_config(default_type), default_type)
+        self.assertEqual(relay.validate_config(default_type)["destinations"]["alerts-default"]["type"], "mattermost")
 
     def test_every_supported_resource_routes_and_renders(self):
         self.assertEqual(set(PATHS), relay.SUPPORTED_RESOURCES)
@@ -107,7 +109,7 @@ class RelayRulesTest(unittest.TestCase):
                 fields = {field["title"]: field["value"] for field in attachment["fields"]}
                 self.assertEqual(fields["Kind"], kind)
                 self.assertEqual(fields["Scope"], "Cluster" if cluster else "Namespaced")
-                self.assertEqual(fields["Alert rule"], rules[0])
+                self.assertEqual(fields["Profile"], rules[0])
 
     def test_rule_override_uses_named_sink(self):
         sinks, rules, cluster = relay.matching_sinks("Deployment", "team-one", CONFIG)
@@ -122,15 +124,15 @@ class RelayRulesTest(unittest.TestCase):
         self.assertEqual(relay.matching_sinks("Service", "team-one", CONFIG)[0], [])
 
     def test_invalid_resource_and_sink_fail_validation(self):
-        bad_resource = json.loads(json.dumps(CONFIG))
+        bad_resource = json.loads(json.dumps(LEGACY_CONFIG))
         bad_resource["namespacedAlertRules"][0]["resources"] = ["NetworkPolicy"]
-        with self.assertRaisesRegex(ValueError, "unsupported values"):
+        with self.assertRaisesRegex(ValueError, "unsupported resource kind"):
             relay.validate_config(bad_resource)
-        bad_sink = json.loads(json.dumps(CONFIG))
+        bad_sink = json.loads(json.dumps(LEGACY_CONFIG))
         bad_sink["namespacedAlertRules"][0]["sinks"] = ["missing"]
         with self.assertRaisesRegex(ValueError, "unsupported values"):
             relay.validate_config(bad_sink)
-        bad_type = json.loads(json.dumps(CONFIG))
+        bad_type = json.loads(json.dumps(LEGACY_CONFIG))
         bad_type["sinks"]["alerts-default"]["type"] = "teams"
         with self.assertRaisesRegex(ValueError, "mattermost or slack"):
             relay.validate_config(bad_type)
@@ -138,7 +140,7 @@ class RelayRulesTest(unittest.TestCase):
     def test_slack_rendering_uses_slack_markdown(self):
         text = relay.render_alert(
             "ConfigMap changed: zarf/example\n*data.status*: before ==> after",
-            rules=["zarf-namespaced-resources"],
+            profiles=["zarf-namespaced-resources"],
             sink_type="slack",
         )["attachments"][0]["text"]
         self.assertIn("*Summary:*", text)
@@ -156,6 +158,63 @@ class RelayRulesTest(unittest.TestCase):
         self.assertNotIn("super-secret", text)
         self.assertNotIn("newer-secret", text)
         self.assertIn("Value changed (redacted)", text)
+
+    def test_profile_marker_routes_exact_semantic_drift(self):
+        profile = CONFIG["profiles"][0]
+        profile["monitor"]["drift"]["include"] = ["image"]
+        marker = f"UDS_PROFILE_V2|{profile['id']}|drift|update|Deployment|zarf|example"
+        alerts, subject = relay.route_change(
+            marker + "\n*spec.template.spec.containers[0].image*: before ==> after", CONFIG
+        )
+        self.assertEqual(subject, "Deployment zarf/example")
+        self.assertEqual([name for name, _ in alerts], ["alerts-default"])
+        attachment = alerts[0][1]["attachments"][0]
+        self.assertIn("Configuration drift detected", attachment["fallback"])
+        fields = {field["title"]: field["value"] for field in attachment["fields"]}
+        self.assertEqual(fields["Drift category"], "image")
+
+        dropped, _ = relay.route_change(
+            marker + "\n*spec.template.spec.containers[0].imagePullPolicy*: IfNotPresent ==> Always", CONFIG
+        )
+        self.assertEqual(dropped, [])
+        profile["context"]["diff"] = False
+        hidden, _ = relay.route_change(
+            marker + "\n*spec.template.spec.containers[0].image*: before ==> after", CONFIG
+        )
+        hidden_text = hidden[0][1]["attachments"][0]["text"]
+        self.assertNotIn("before", hidden_text)
+        self.assertNotIn("after", hidden_text)
+        profile["context"]["diff"] = True
+        profile["monitor"]["drift"]["include"] = ["manifest"]
+
+    def test_profile_create_event_routes_without_a_diff(self):
+        profile = CONFIG["profiles"][0]
+        marker = f"UDS_PROFILE_V2|{profile['id']}|change|create|ConfigMap|zarf|example"
+        alerts, _ = relay.route_change(marker, CONFIG)
+        self.assertIn("ConfigMap created", alerts[0][1]["attachments"][0]["fallback"])
+
+    def test_health_json_routes_without_logs(self):
+        profile = CONFIG["profiles"][0]
+        profile["monitor"]["health"]["crashLoop"] = True
+        marker = f"UDS_PROFILE_V2|{profile['id']}|health|crashLoop|Pod|zarf|broken"
+        payload = {"title": marker, "description": "Container restarted repeatedly", "subject": {"name": "broken", "namespace": "zarf", "kind": "Pod"}}
+        alerts, _ = relay.route_health(payload, CONFIG)
+        attachment = alerts[0][1]["attachments"][0]
+        self.assertIn("Crash loop", attachment["fallback"])
+        self.assertNotIn("logs", attachment["text"].lower())
+
+    def test_health_context_is_bounded_typed_and_omits_files(self):
+        payload = {"enrichments": [{"title": "Pod events", "blocks": [
+            {"headers": ["Reason", "Message"], "rows": [["Failed", "token=exposed"]]},
+            {"filename": "pod.log", "contents": "credential material"},
+        ]}]}
+        mattermost = relay.health_context(payload, "mattermost")
+        slack = relay.health_context(payload, "slack")
+        self.assertIn("**Pod events**", mattermost)
+        self.assertIn("*Pod events*", slack)
+        self.assertNotIn("**", slack)
+        self.assertIn("token=[redacted]", mattermost)
+        self.assertNotIn("credential material", mattermost)
 
     def test_sink_url_reads_only_configured_secret_key(self):
         with tempfile.TemporaryDirectory() as directory:

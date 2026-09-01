@@ -25,10 +25,12 @@ variables:
     default: ""
   - name: ALERT_ENVIRONMENT
     default: "production"
-  # Pass JSON as compact CLI input or a multi-line uds-config string.
-  # See docs/configuration.md for both forms.
+  # Empty uses the package's built-in zarf and cluster-resource Profiles.
+  - name: PROFILE_CONFIG
+    default: ""
+  # Internal upgrade input; new deployments configure PROFILE_CONFIG.
   - name: ALERT_CONFIG
-    default: '{"defaultSinks":["alerts-default"],"sinks":{"alerts-default":{"type":"mattermost","secretKey":"alerts-default-url"}},"namespacedAlertRules":[{"name":"zarf-namespaced-resources","enabled":true,"namespaces":["zarf"],"resources":["ConfigMap","DaemonSet","Deployment","HorizontalPodAutoscaler","Ingress","Job","Pod","ReplicaSet","Service","ServiceAccount","StatefulSet"]}],"clusterAlertRules":[{"name":"cluster-scoped-resources","enabled":true,"resources":["ClusterRole","ClusterRoleBinding","Namespace","Node","PersistentVolume"]}]}'
+    default: ""
   - name: WATCH_SECRETS
     description: Enable opt-in Kubewatch observation for Secret updates
     default: "false"
@@ -45,6 +47,12 @@ components:
       - name: robusta
         valuesFiles:
           - values/upstream-values.yaml
+      # Runs after the upstream chart so its verified output can update the
+      # exact Robusta configuration Secret and trigger Robusta's file reload.
+      - name: robusta-profile-compiler
+        namespace: robusta
+        version: 0.1.0
+        localPath: profile-compiler-chart
     images:
       - docker.io/robustadev/robusta-runner:0.48.0
       - docker.io/robustadev/kubewatch:v2.16.1
