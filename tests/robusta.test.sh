@@ -41,6 +41,7 @@ fi
 "${kubectl[@]}" get secret robusta-alert-webhooks -n robusta >/dev/null
 "${kubectl[@]}" get deployment robusta-alert-relay -n robusta >/dev/null
 "${kubectl[@]}" wait --for=condition=Available deployment/robusta-webhook-mock -n robusta --timeout=180s
+[[ $("${kubectl[@]}" get deployment robusta-runner -n robusta -o jsonpath='{range .spec.template.spec.containers[*].env[?(@.name=="ENABLE_TELEMETRY")]}{.value}{end}') == "false" ]]
 
 # The production playbook set and safe defaults must be present in the upstream package.
 profiles=$("${kubectl[@]}" get configmap robusta-alert-relay -n robusta -o jsonpath='{.data.profiles\.json}')

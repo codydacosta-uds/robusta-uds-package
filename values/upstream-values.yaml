@@ -54,6 +54,11 @@ runner:
   # package-owned annotation when either contract changes so upgrades roll safely.
   annotations:
     uds.dev/alert-config-version: alert-relay-v1
+  # This standalone package does not use Robusta SaaS. Disable its periodic
+  # usage telemetry so the runner does not call an unavailable external API.
+  additional_env_vars:
+    - name: ENABLE_TELEMETRY
+      value: "false"
   crdPermissions:
     argo: false
     flux: false

@@ -42,7 +42,7 @@ The `cluster-scoped-resources` profile sends red webhook notifications for updat
 - Every supported resource uses the same package-managed attachment layout: environment, namespace or `cluster-scoped`, resource, kind, scope, severity, matching profile, resource-aware change details, and Robusta footer.
 - The built-in playbooks report resource **updates/changes**. They do not advertise create/delete lifecycle notifications.
 - Secret observation is disabled. Events, PersistentVolumeClaims, NetworkPolicies, and arbitrary custom resources are not part of the built-in alert path.
-- Prometheus, HolmesGPT, Robusta SaaS integration, and a user-facing Robusta UI are not enabled or required.
+- Prometheus, HolmesGPT, Robusta SaaS integration, usage telemetry, and a user-facing Robusta UI are not enabled or required.
 
 > [!NOTE]
 > `ALERT_CONFIG` is optional. Override it only to change exact namespaces, supported resource selections, or named-sink routing. Alert formatting and the native-resource playbooks remain package-managed.
@@ -201,7 +201,7 @@ Without an `ALERT_CONFIG` override, the package uses:
 - `cluster-scoped-resources`: enabled for every supported cluster-scoped resource and produces red attachments
 - Default sink: `alerts-default` (`type: mattermost`), mapped to Secret key `alerts-default-url`
 - Secret observation: disabled until explicitly enabled
-- Prometheus stack and HolmesGPT: disabled
+- Prometheus stack, HolmesGPT, and Robusta usage telemetry: disabled
 
 ## More configuration
 

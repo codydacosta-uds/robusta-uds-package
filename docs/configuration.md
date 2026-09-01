@@ -10,6 +10,7 @@ With a valid `robusta-alert-webhooks` Secret, the package starts alerting immedi
 - `cluster-scoped-resources` watches supported cluster-scoped resources and sends red attachments.
 - Both use the named `alerts-default` webhook destination, whose default type is `mattermost`.
 - Secret observation is supported but remains disabled until explicitly enabled.
+- Robusta SaaS usage telemetry is disabled for the standalone package workflow.
 
 The readable default is [`examples/alert-config.yaml`](../examples/alert-config.yaml).
 
