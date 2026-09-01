@@ -9,7 +9,21 @@ EVICT=health-evicted
 JOB=health-job
 GOOD_IMAGE=$("${K[@]}" -n robusta get deployment robusta-alert-relay -o jsonpath='{.spec.template.spec.containers[0].image}')
 payload() { "${K[@]}" exec -n robusta deploy/robusta-webhook-mock -- python -c 'from urllib.request import urlopen; print(urlopen("http://127.0.0.1:8080/received", timeout=2).read().decode())' 2>/dev/null || true; }
-count() { payload | grep -c "$1" || true; }
+# Inspect notification titles rather than full payload text. Event context in an
+# unrelated health finding can mention other resources in the same namespace.
+count() {
+  payload | python3 -c 'import json,sys
+needle=sys.argv[1]
+count=0
+for line in sys.stdin:
+    try: item=json.loads(line)
+    except json.JSONDecodeError: continue
+    attachments=item.get("attachments") or []
+    title=str(attachments[0].get("fallback", "")) if attachments else ""
+    if needle in title and not title.startswith("Configuration drift detected"):
+        count += 1
+print(count)' "$1"
+}
 cleanup() {
   "${K[@]}" -n "$NS" delete pod "$CRASH" "$IMAGE" "$OOM" "$EVICT" --force --grace-period=0 --ignore-not-found >/dev/null 2>&1 || true
   "${K[@]}" -n "$NS" delete job "$JOB" --ignore-not-found >/dev/null 2>&1 || true
@@ -78,11 +92,11 @@ YAML
 
 for i in $(seq 1 180); do
   body=$(payload)
-  crash=$(grep -c "$CRASH" <<<"$body" || true)
-  image=$(grep -c "$IMAGE" <<<"$body" || true)
-  oom=$(grep -c "$OOM" <<<"$body" || true)
-  evict=$(grep -c "$EVICT" <<<"$body" || true)
-  job=$(grep -c "$JOB" <<<"$body" || true)
+  crash=$(count "$CRASH")
+  image=$(count "$IMAGE")
+  oom=$(count "$OOM")
+  evict=$(count "$EVICT")
+  job=$(count "$JOB")
   if (( crash > before_health_crashloop && image > before_health_imagepull && oom > before_health_oom && evict > before_health_evicted && job > before_health_job )); then
     job_payloads=$(grep "$JOB" <<<"$body")
     grep -q "Job Events" <<<"$job_payloads"

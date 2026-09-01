@@ -7,11 +7,20 @@ OWNED=(baseline-crash baseline-image baseline-oom baseline-evict baseline-statef
 UNRELATED=(unrelated-crash unrelated-image unrelated-oom unrelated-evict unrelated-job optout-oom)
 payload() { "${K[@]}" exec -n robusta deploy/robusta-webhook-mock -- python -c 'from urllib.request import urlopen; print(urlopen("http://127.0.0.1:8080/received", timeout=2).read().decode())' 2>/dev/null || true; }
 count() {
-  if [[ "$1" == "optout-oom" ]]; then
-    payload | grep "$1" | grep "Out-of-memory kill" | grep -vc "Configuration drift detected" || true
-  else
-    payload | grep "$1" | grep -vc "Configuration drift detected" || true
-  fi
+  payload | python3 -c 'import json,sys
+needle=sys.argv[1]
+count=0
+for line in sys.stdin:
+    try: item=json.loads(line)
+    except json.JSONDecodeError: continue
+    attachments=item.get("attachments") or []
+    title=str(attachments[0].get("fallback", "")) if attachments else ""
+    if needle not in title or title.startswith("Configuration drift detected"):
+        continue
+    if needle == "optout-oom" and not title.startswith("Out-of-memory kill"):
+        continue
+    count += 1
+print(count)' "$1"
 }
 cleanup() {
   "${K[@]}" -n "$NS" delete deployment baseline-crash baseline-image baseline-oom baseline-evict unrelated-crash unrelated-image unrelated-oom unrelated-evict optout-oom --ignore-not-found >/dev/null 2>&1 || true
@@ -236,26 +245,22 @@ done
 
 for i in $(seq 1 180); do
   body=$(payload)
-  health_body=$(grep -v "Configuration drift detected" <<<"$body" || true)
-  optout_oom_body=$(grep "Out-of-memory kill" <<<"$health_body" || true)
   ready=true
   for name in "${OWNED[@]}"; do
     key=${name//-/_}; before_var=before_${key}
-    (( $(grep -c "$name" <<<"$health_body" || true) > ${!before_var} )) || ready=false
+    (( $(count "$name") > ${!before_var} )) || ready=false
   done
   if $ready; then
     for name in "${UNRELATED[@]}"; do
       key=${name//-/_}; before_var=before_${key}
-      comparison_body=$health_body
-      [[ "$name" == "optout-oom" ]] && comparison_body=$optout_oom_body
-      if (( $(grep -c "$name" <<<"$comparison_body" || true) > ${!before_var} )); then
+      if (( $(count "$name") > ${!before_var} )); then
         echo "Unrelated or opted-out failure was delivered: $name"
         exit 1
       fi
     done
 
     crash_pod=$("${K[@]}" -n "$NS" get pod -l test=baseline-crash -o jsonpath='{.items[0].metadata.name}')
-    before_repeat=$(grep -c "$crash_pod" <<<"$health_body" || true)
+    before_repeat=$(count "$crash_pod")
     for value in 1 2 3; do
       "${K[@]}" -n "$NS" annotate pod "$crash_pod" profile-test-repeat=$value --overwrite >/dev/null
       sleep 2
