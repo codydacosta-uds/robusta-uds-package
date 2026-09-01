@@ -4,6 +4,20 @@ This package watches supported Kubernetes resources for changes and sends format
 
 Mattermost and Slack incoming webhooks are supported. A Robusta SaaS account, UI, Prometheus stack, or custom Robusta playbooks are not required.
 
+## Core concepts
+
+| Term | What it means |
+| --- | --- |
+| **Alert profile** | A rule that selects exact namespaces and Kubernetes resource types to watch. |
+| **Cluster alert profile** | A rule for cluster-scoped resources, such as Nodes and ClusterRoles, which do not belong to a namespace. |
+| **Sink** | A logical destination name, such as `alerts-default`. Profiles send alerts to sink names instead of containing webhook URLs. |
+| **Destination type** | The receiver's payload format: `mattermost` or `slack`. Mattermost is the default. |
+| **Webhook Secret** | The external `robusta-alert-webhooks` Kubernetes Secret that stores destination URLs. Each sink maps to one key in this Secret. |
+| **Alert relay** | The package component that matches profiles, redacts sensitive data, formats alerts, and sends them to each sink. |
+| **`ALERT_CONFIG`** | Optional JSON containing custom profiles and sink mappings. Omit it to use the package defaults. |
+
+In short: a **profile** decides what should alert, a **sink** names where it should go, and the sink's **Secret key** provides the webhook URL.
+
 ## Quick start
 
 ### Prerequisites
@@ -95,32 +109,6 @@ Deploying without `ALERT_CONFIG` enables two profiles:
 Both profiles route to the logical sink `alerts-default`. That sink uses `type: mattermost` and reads its URL from the `alerts-default-url` key in the `robusta-alert-webhooks` Secret.
 
 The built-in alerts report resource **updates**. Create and delete events are not advertised as part of this workflow. Secret observation is disabled by default.
-
-## Configuration concepts
-
-| Term | Plain-English meaning |
-| --- | --- |
-| **Alert profile** | A rule that selects exact namespaces and supported Kubernetes resource types. It can also choose where matching alerts are sent. |
-| **Cluster alert profile** | The same type of rule for cluster-scoped resources, which do not belong to a namespace. |
-| **Sink** | A logical destination name such as `alerts-default` or `security-alerts`. Profiles refer to this name instead of containing a webhook URL. |
-| **Destination type** | The payload format required by the receiver. Supported values are `mattermost` and `slack`; omitted values default to `mattermost`. |
-| **Secret key** | The key in `robusta-alert-webhooks` that contains the actual webhook URL for a sink. |
-| **Default sinks** | The destinations used when a profile does not specify its own `sinks` list. |
-| **Alert relay** | The package component that matches profiles, removes duplicates, redacts Secret values, formats each destination, and sends the webhook request. |
-
-A sink is a route to a destination, not the webhook itself:
-
-```yaml
-defaultSinks:
-  - alerts-default
-
-sinks:
-  alerts-default:
-    type: mattermost
-    secretKey: alerts-default-url
-```
-
-In this example, profiles use `alerts-default`; the relay reads the `alerts-default-url` key from the `robusta-alert-webhooks` Secret and formats the alert for Mattermost.
 
 ## Customize profiles
 
