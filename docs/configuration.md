@@ -1,6 +1,6 @@
 # Alert rule configuration
 
-This package adds a rule-based policy layer over Robusta. Alert rules are package-defined—not an upstream Robusta feature—so users can select exact namespaces, native Kubernetes resource types, and named sinks without writing Robusta playbooks, triggers, or actions. The package generates and owns that Robusta implementation.
+Defense Unicorns engineers designed this package's rule-based policy layer to make Robusta easier to configure. Alert rules are package-defined—not an upstream Robusta feature—so users can select exact namespaces, native Kubernetes resource types, and named sinks without writing Robusta playbooks, triggers, or actions. The package generates and owns that Robusta implementation.
 
 ## Immediate defaults
 

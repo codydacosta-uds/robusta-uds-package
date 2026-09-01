@@ -18,7 +18,7 @@ Mattermost and Slack incoming webhooks are supported. A Robusta SaaS account, UI
 
 In short: an **alert rule** decides what should alert, a **sink** names where it should go, and the sink's **Secret key** provides the webhook URL.
 
-Alert rules are not an upstream Robusta feature. They are this package's simpler policy layer over Robusta playbooks, triggers, and sinks. Users declare what to watch and where to send it; the package translates resource events into normalized findings and applies those rules before external delivery.
+Defense Unicorns engineers designed alert rules for this package to make Robusta easier to configure. Alert rules are not an upstream Robusta feature; they provide a simpler policy layer over Robusta playbooks, triggers, and sinks. Users declare what to watch and where to send it; the package translates resource events into normalized findings and applies those rules before external delivery.
 
 ## Quick start
 
