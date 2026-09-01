@@ -23,7 +23,6 @@ profiles:
       statefulset:
         names:
           - gitaly
-      configmap: {}
 ```
 
 This minimal GitLab Profile receives applicable workload-health defaults and the standard Mattermost destination automatically. Adjust names to the exact resources produced by the installed GitLab package or Helm release. The complete readable example adds intentional lifecycle and semantic drift monitoring in [`examples/profile-config.yaml`](../examples/profile-config.yaml).
@@ -339,7 +338,7 @@ For multiple destinations, add one key per destination. Never commit webhook URL
 Supply the readable Profile YAML directly:
 
 ```bash
-PROFILE_CONFIG="$(<examples/profile-config.yaml)"
+PROFILE_CONFIG="$(cat examples/profile-config.yaml)"
 
 uds zarf package deploy zarf-package-robusta-amd64-<version>-upstream.tar.zst \
   --set-variables CLUSTER_NAME=my-cluster \

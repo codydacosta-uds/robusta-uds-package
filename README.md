@@ -93,7 +93,7 @@ No Profile configuration is required to start. The package includes one delibera
 
 It sends to the `alerts-default` Mattermost destination, backed by the `alerts-default-url` key in `robusta-alert-webhooks`. It does not enable manifest drift, create/delete notifications, cluster-resource monitoring, standalone Pod monitoring, or Secret watching. Those behaviors require an intentional Profile so a new installation does not produce routine infrastructure noise.
 
-Supplying `PROFILE_CONFIG` replaces the built-in Profile with the exact application boundaries and destinations you define. Include an equivalent `uds-core-health` Profile in custom configuration when that coverage should remain.
+Supplying `PROFILE_CONFIG` replaces the built-in Profile with the exact application boundaries and optional destinations you define. Include an equivalent `uds-core-health` Profile in custom configuration when that coverage should remain; custom and built-in Profiles are not silently merged.
 
 ## Core concepts
 
@@ -127,7 +127,6 @@ profiles:
       statefulset:
         names:
           - gitaly
-      configmap: {}
 ```
 
 That is enough to automatically monitor Pods owned by the selected GitLab Deployments and StatefulSet for crash loops, image-pull failures, OOM kills, and eviction. The user does not configure Robusta triggers, playbooks, ownership traversal, cooldowns, or the standard Mattermost destination. Resource names should be adjusted to the exact names produced by the installed GitLab package or Helm release.
@@ -135,7 +134,7 @@ That is enough to automatically monitor Pods owned by the selected GitLab Deploy
 Start from [`examples/profile-config.yaml`](examples/profile-config.yaml) and supply the YAML directly through `PROFILE_CONFIG`:
 
 ```bash
-PROFILE_CONFIG="$(<examples/profile-config.yaml)"
+PROFILE_CONFIG="$(cat examples/profile-config.yaml)"
 
 uds zarf package deploy "$PACKAGE" \
   --set-variables CLUSTER_NAME=my-cluster \
@@ -150,7 +149,7 @@ A complete UDS configuration example is available at [`examples/uds-config.yaml`
 
 Resource types are written in lowercase for readability. Matching is case-insensitive, so `deployment`, `Deployment`, and `DEPLOYMENT` resolve to the same Kubernetes type. `{}` selects every matching resource of that type; `names` selects exact objects only.
 
-The ConfigMap receives no workload-health monitoring. Routine GitLab changes are not notified unless the Profile explicitly configures lifecycle events or semantic drift.
+Routine GitLab deployments and configuration updates are not notified unless the Profile explicitly configures lifecycle events or semantic drift.
 
 ## Drift semantics
 
@@ -209,7 +208,7 @@ Set `defaults: false` to disable the entire baseline. Individual signals can the
 
 Unscoped upstream health notifications are disabled. Safe Kubernetes Event context is enabled automatically for health findings. Application logs, Prometheus graphs, and node command output are not attached.
 
-Existing Robusta controls reduce repeated noise: crash-loop, image-pull, and eviction findings have four-hour rate limits; OOM findings have a one-hour rate limit; Job failure fires only on transition to Failed. These cooldowns are runner-memory controls, not durable incident state, and reset when the runner restarts. Image-pull findings also wait at least 120 seconds to confirm the failure persists.
+Existing Robusta controls reduce repeated noise: crash-loop, image-pull, and eviction findings have four-hour rate limits; OOM findings have a one-hour rate limit; Job failure fires only on transition to Failed. A four-hour cooldown means the same qualifying problem for the same runtime identity will not notify again during that period, even if it briefly recovers and returns. These cooldowns are runner-memory controls, not durable incident state, and reset when the runner restarts. Image-pull findings also wait at least 120 seconds to confirm the failure persists.
 
 For transient destination failures, the package relay makes up to three delivery attempts with one- and two-second delays. Retries are bounded and held only for the current notification; they are not a persistent delivery queue.
 
