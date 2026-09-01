@@ -10,8 +10,8 @@ sinks:
     type: mattermost # Change to slack for a Slack incoming webhook.
     secretKey: alerts-default-url
 
-# Namespaced profiles use exact namespace names. Omitting sinks uses defaultSinks.
-alertProfiles:
+# Namespaced alert rules use exact namespace names. Omitting sinks uses defaultSinks.
+namespacedAlertRules:
   - name: zarf-namespaced-resources
     enabled: true
     namespaces:
@@ -29,8 +29,8 @@ alertProfiles:
       - ServiceAccount
       - StatefulSet
 
-# Cluster-scoped profiles have no namespaces and produce red attachments.
-clusterAlertProfiles:
+# Cluster alert rules have no namespaces and produce red attachments.
+clusterAlertRules:
   - name: cluster-scoped-resources
     enabled: true
     resources:

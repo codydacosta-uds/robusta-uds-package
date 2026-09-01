@@ -18,7 +18,7 @@ CONFIG = {
         "alerts-default": {"type": "mattermost", "secretKey": "alerts-default-url"},
         "team-alerts": {"type": "slack", "secretKey": "team-url"},
     },
-    "alertProfiles": [
+    "namespacedAlertRules": [
         {
             "name": "zarf-namespaced-resources",
             "namespaces": ["zarf"],
@@ -31,7 +31,7 @@ CONFIG = {
             "sinks": ["team-alerts"],
         },
     ],
-    "clusterAlertProfiles": [
+    "clusterAlertRules": [
         {
             "name": "cluster-scoped-resources",
             "resources": sorted(relay.CLUSTER_RESOURCES),
@@ -80,7 +80,7 @@ EXPECTED_FORMAT = {
 }
 
 
-class RelayProfilesTest(unittest.TestCase):
+class RelayRulesTest(unittest.TestCase):
     def test_configuration_is_valid(self):
         self.assertIs(relay.validate_config(CONFIG), CONFIG)
         default_type = json.loads(json.dumps(CONFIG))
@@ -93,11 +93,11 @@ class RelayProfilesTest(unittest.TestCase):
             with self.subTest(kind=kind):
                 cluster = kind in relay.CLUSTER_RESOURCES
                 namespace = "cluster-scoped" if cluster else "zarf"
-                sinks, profiles, is_cluster = relay.matching_sinks(kind, namespace, CONFIG)
+                sinks, rules, is_cluster = relay.matching_sinks(kind, namespace, CONFIG)
                 self.assertEqual(sinks, ["alerts-default"])
                 self.assertEqual(is_cluster, cluster)
                 message = f"{kind} changed: {namespace}/example\n*{path}*: before ==> after"
-                alert = relay.render_alert(message, relay.RED if cluster else relay.YELLOW, profiles)
+                alert = relay.render_alert(message, relay.RED if cluster else relay.YELLOW, rules)
                 attachment = alert["attachments"][0]
                 self.assertEqual(attachment["color"], relay.RED if cluster else relay.YELLOW)
                 self.assertIn(f"{kind} changed", attachment["fallback"])
@@ -107,11 +107,12 @@ class RelayProfilesTest(unittest.TestCase):
                 fields = {field["title"]: field["value"] for field in attachment["fields"]}
                 self.assertEqual(fields["Kind"], kind)
                 self.assertEqual(fields["Scope"], "Cluster" if cluster else "Namespaced")
+                self.assertEqual(fields["Alert rule"], rules[0])
 
-    def test_profile_override_uses_named_sink(self):
-        sinks, profiles, cluster = relay.matching_sinks("Deployment", "team-one", CONFIG)
+    def test_rule_override_uses_named_sink(self):
+        sinks, rules, cluster = relay.matching_sinks("Deployment", "team-one", CONFIG)
         self.assertEqual(sinks, ["team-alerts"])
-        self.assertEqual(profiles, ["team-resources"])
+        self.assertEqual(rules, ["team-resources"])
         self.assertFalse(cluster)
 
     def test_namespace_matching_is_exact(self):
@@ -122,11 +123,11 @@ class RelayProfilesTest(unittest.TestCase):
 
     def test_invalid_resource_and_sink_fail_validation(self):
         bad_resource = json.loads(json.dumps(CONFIG))
-        bad_resource["alertProfiles"][0]["resources"] = ["NetworkPolicy"]
+        bad_resource["namespacedAlertRules"][0]["resources"] = ["NetworkPolicy"]
         with self.assertRaisesRegex(ValueError, "unsupported values"):
             relay.validate_config(bad_resource)
         bad_sink = json.loads(json.dumps(CONFIG))
-        bad_sink["alertProfiles"][0]["sinks"] = ["missing"]
+        bad_sink["namespacedAlertRules"][0]["sinks"] = ["missing"]
         with self.assertRaisesRegex(ValueError, "unsupported values"):
             relay.validate_config(bad_sink)
         bad_type = json.loads(json.dumps(CONFIG))
@@ -137,7 +138,7 @@ class RelayProfilesTest(unittest.TestCase):
     def test_slack_rendering_uses_slack_markdown(self):
         text = relay.render_alert(
             "ConfigMap changed: zarf/example\n*data.status*: before ==> after",
-            profiles=["zarf-namespaced-resources"],
+            rules=["zarf-namespaced-resources"],
             sink_type="slack",
         )["attachments"][0]["text"]
         self.assertIn("*Summary:*", text)

@@ -44,17 +44,17 @@ fi
 [[ $("${kubectl[@]}" get deployment robusta-runner -n robusta -o jsonpath='{range .spec.template.spec.containers[*].env[?(@.name=="ENABLE_TELEMETRY")]}{.value}{end}') == "false" ]]
 
 # The production playbook set and safe defaults must be present in the upstream package.
-profiles=$("${kubectl[@]}" get configmap robusta-alert-relay -n robusta -o jsonpath='{.data.profiles\.json}')
-grep -q 'zarf-namespaced-resources' <<<"$profiles"
-grep -q 'cluster-scoped-resources' <<<"$profiles"
+rules=$("${kubectl[@]}" get configmap robusta-alert-relay -n robusta -o jsonpath='{.data.rules\.json}')
+grep -q 'zarf-namespaced-resources' <<<"$rules"
+grep -q 'cluster-scoped-resources' <<<"$rules"
 playbooks=$("${kubectl[@]}" get secret robusta-playbooks-config-secret -n robusta -o jsonpath='{.data.active_playbooks\.yaml}' | base64 --decode)
-[[ $(grep -c 'name: Profiled' <<<"$playbooks") -eq 17 ]]
+[[ $(grep -c 'name: RuleBased' <<<"$playbooks") -eq 17 ]]
 if "${kubectl[@]}" get clusterrole robusta-secret-watcher >/dev/null 2>&1; then
   echo "Secret watcher RBAC must not exist with default WATCH_SECRETS=false"
   exit 1
 fi
 
-# Cause a real default-profile change alert and verify the relay delivered an
+# Cause a real default-rule change alert and verify the relay delivered an
 # attachment payload. The default exact namespace is zarf.
 "${kubectl[@]}" create namespace zarf --dry-run=client -o yaml | "${kubectl[@]}" apply -f - >/dev/null
 alert_name="robusta-alert-test-$$"

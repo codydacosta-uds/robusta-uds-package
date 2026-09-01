@@ -1,6 +1,6 @@
 # UDS Robusta Package
 
-This package watches supported Kubernetes resources for changes and sends formatted alerts to external webhook destinations. You choose the exact namespaces, resource types, and destinations through alert profiles; the package owns the Robusta playbooks, routing, formatting, and Secret redaction.
+This package watches supported Kubernetes resources for changes and sends formatted alerts to external webhook destinations. You choose the exact namespaces, resource types, and destinations through package-defined alert rules; the package owns the Robusta playbooks, routing, formatting, and Secret redaction.
 
 Mattermost and Slack incoming webhooks are supported. A Robusta SaaS account, UI, Prometheus stack, or custom Robusta playbooks are not required.
 
@@ -8,15 +8,17 @@ Mattermost and Slack incoming webhooks are supported. A Robusta SaaS account, UI
 
 | Term | What it means |
 | --- | --- |
-| **Alert profile** | A rule that selects exact namespaces and Kubernetes resource types to watch. |
-| **Cluster alert profile** | A rule for cluster-scoped resources, such as Nodes and ClusterRoles, which do not belong to a namespace. |
-| **Sink** | A logical destination name, such as `alerts-default`. Profiles send alerts to sink names instead of containing webhook URLs. |
+| **Namespaced alert rule** | A package-defined rule that selects exact namespaces and Kubernetes resource types to alert on. |
+| **Cluster alert rule** | A package-defined rule for cluster-scoped resources, such as Nodes and ClusterRoles, which do not belong to a namespace. |
+| **Sink** | A logical destination name, such as `alerts-default`. Rules send alerts to sink names instead of containing webhook URLs. |
 | **Destination type** | The receiver's payload format: `mattermost` or `slack`. Mattermost is the default. |
 | **Webhook Secret** | The external `robusta-alert-webhooks` Kubernetes Secret that stores destination URLs. Each sink maps to one key in this Secret. |
-| **Alert relay** | The package component that matches profiles, redacts sensitive data, formats alerts, and sends them to each sink. |
-| **`ALERT_CONFIG`** | Optional JSON containing custom profiles and sink mappings. Omit it to use the package defaults. |
+| **Alert relay** | The package component that matches rules, redacts sensitive data, formats alerts, and sends them to each sink. |
+| **`ALERT_CONFIG`** | Optional JSON containing custom alert rules and sink mappings. Omit it to use the package defaults. |
 
-In short: a **profile** decides what should alert, a **sink** names where it should go, and the sink's **Secret key** provides the webhook URL.
+In short: an **alert rule** decides what should alert, a **sink** names where it should go, and the sink's **Secret key** provides the webhook URL.
+
+Alert rules are not an upstream Robusta feature. They are this package's simpler policy layer over Robusta playbooks, triggers, and sinks. Users declare what to watch and where to send it; the package translates resource events into normalized findings and applies those rules before external delivery.
 
 ## Quick start
 
@@ -42,7 +44,7 @@ kubectl -n robusta create secret generic robusta-alert-webhooks \
 
 ### 2. Deploy with the defaults
 
-No alert configuration file is required for the default behavior.
+No custom alert rules are required for the default behavior.
 
 ```bash
 PACKAGE=zarf-package-robusta-amd64-<version>-upstream.tar.zst
@@ -70,7 +72,7 @@ The UDS Package should report `Ready`, and these deployments should be available
 
 ### 4. Send a test alert
 
-The default namespaced profile watches the exact `zarf` namespace:
+The default namespaced alert rule watches the exact `zarf` namespace:
 
 ```bash
 kubectl -n zarf create configmap robusta-getting-started \
@@ -89,28 +91,28 @@ The update should produce a yellow `ConfigMap changed` alert at the default webh
 
 ## Alert examples
 
-**Namespaced resource alert**
+**Namespaced alert rule**
 
-![Namespaced Istio Deployment resource alert](docs/assets/robusta-namespaced-alert.png)
+![Namespaced Istio Deployment alert rule](docs/assets/robusta-namespaced-alert.png)
 
-**Cluster-scoped resource alert**
+**Cluster alert rule**
 
-![Cluster-scoped Istio RBAC alert](docs/assets/robusta-cluster-alert.png)
+![Cluster-scoped Istio RBAC alert rule](docs/assets/robusta-cluster-alert.png)
 
 ## Default alert coverage
 
-Deploying without `ALERT_CONFIG` enables two profiles:
+Deploying without `ALERT_CONFIG` enables two package-defined alert rules:
 
-| Profile | Scope | Resources | Presentation |
+| Alert rule | Scope | Resources | Presentation |
 | --- | --- | --- | --- |
 | `zarf-namespaced-resources` | Exact namespace `zarf` | ConfigMap, DaemonSet, Deployment, HorizontalPodAutoscaler, Ingress, Job, Pod, ReplicaSet, Service, ServiceAccount, StatefulSet | Yellow |
 | `cluster-scoped-resources` | Cluster-wide | ClusterRole, ClusterRoleBinding, Namespace, Node, PersistentVolume | Red |
 
-Both profiles route to the logical sink `alerts-default`. That sink uses `type: mattermost` and reads its URL from the `alerts-default-url` key in the `robusta-alert-webhooks` Secret.
+Both rules route to the logical sink `alerts-default`. That sink uses `type: mattermost` and reads its URL from the `alerts-default-url` key in the `robusta-alert-webhooks` Secret.
 
 The built-in alerts report resource **updates**. Create and delete events are not advertised as part of this workflow. Secret observation is disabled by default.
 
-## Customize profiles
+## Customize alert rules
 
 Start with the readable package example:
 
@@ -118,7 +120,7 @@ Start with the readable package example:
 cp examples/alert-config.yaml my-alert-config.yaml
 ```
 
-A profile for an application namespace can be as small as:
+A namespaced alert rule for an application can be as small as:
 
 ```yaml
 defaultSinks: [alerts-default]
@@ -128,12 +130,12 @@ sinks:
     type: mattermost
     secretKey: alerts-default-url
 
-alertProfiles:
+namespacedAlertRules:
   - name: application-resources
     namespaces: [application]
     resources: [ConfigMap, Deployment, Ingress, Service]
 
-clusterAlertProfiles: []
+clusterAlertRules: []
 ```
 
 Namespace matching is exact: `application` does not match `application-dev`.
@@ -154,7 +156,7 @@ For multiple Mattermost and Slack destinations, see [`examples/alert-config-mult
 
 ## Use in a UDS bundle
 
-For the default profiles, the package requires only the environment-specific labels:
+For the default alert rules, the package requires only the environment-specific labels:
 
 ```yaml
 variables:
@@ -173,19 +175,19 @@ Do not commit webhook URLs or signing keys to `uds-config.yaml`; provide sensiti
 Kubernetes resource update
   -> Robusta forwarder observes the event
   -> Robusta runner creates a normalized change finding
-  -> alert relay matches profiles and named sinks
+  -> alert relay matches package-defined rules and named sinks
   -> relay formats and sends each webhook destination
 ```
 
 - **Forwarder:** watches supported native Kubernetes resource updates.
 - **Runner:** executes the package-managed playbook for the resource type.
 - **Playbooks:** normalize resource-specific changes; users do not write these.
-- **Profiles:** decide which normalized findings should be delivered and where.
+- **Alert rules:** decide which normalized findings should be delivered and where.
 - **Relay:** performs filtering, deduplication, redaction, formatting, and delivery.
 
 ## Important behavior
 
-- Secret alerts require both `WATCH_SECRETS=true` and `Secret` in a profile. Secret values are always redacted.
+- Secret alerts require both `WATCH_SECRETS=true` and `Secret` in an alert rule. Secret values are always redacted.
 - Robusta/Kubewatch emits Secret label, annotation, and type changes, but not Secret data-value changes.
 - Events, PersistentVolumeClaims, NetworkPolicies, and arbitrary custom resources are not included in the built-in alert path.
 - Unsupported or unmatched resources are not delivered.
@@ -194,4 +196,4 @@ Kubernetes resource update
 
 ## More configuration
 
-See [Alert profile configuration](docs/configuration.md) for the complete schema, all supported resources, multiple destinations, Secret opt-in behavior, package variables, validation rules, and troubleshooting.
+See [Alert rule configuration](docs/configuration.md) for the complete schema, all supported resources, multiple destinations, Secret opt-in behavior, package variables, validation rules, and troubleshooting.

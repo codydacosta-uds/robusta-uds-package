@@ -10,7 +10,7 @@ metadata:
 data:
   relay.py: |
 {{ .Files.Get "files/relay.py" | indent 4 }}
-  profiles.json: {{ .Values.alertConfig | quote }}
+  rules.json: {{ .Values.alertConfig | quote }}
 
 ---
 apiVersion: apps/v1
@@ -41,7 +41,7 @@ spec:
             - name: ALERT_ENVIRONMENT
               value: {{ .Values.alertEnvironment | quote }}
             - name: ALERT_CONFIG_PATH
-              value: /app/profiles.json
+              value: /app/rules.json
             - name: SINK_DIRECTORY
               value: /etc/robusta-alert-webhooks
           ports:

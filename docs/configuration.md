@@ -1,6 +1,6 @@
-# Alert profile configuration
+# Alert rule configuration
 
-Robusta `0.48.0` is packaged with a profile-aware webhook alert relay. Users select exact namespaces, native Kubernetes resource types, and named sinks. The package generates and owns the Robusta playbooks; users do not need to write them.
+This package adds a rule-based policy layer over Robusta. Alert rules are package-defined—not an upstream Robusta feature—so users can select exact namespaces, native Kubernetes resource types, and named sinks without writing Robusta playbooks, triggers, or actions. The package generates and owns that Robusta implementation.
 
 ## Immediate defaults
 
@@ -8,16 +8,16 @@ With a valid `robusta-alert-webhooks` Secret, the package starts alerting immedi
 
 - `zarf-namespaced-resources` watches supported namespaced resources in the exact `zarf` namespace and sends yellow attachments.
 - `cluster-scoped-resources` watches supported cluster-scoped resources and sends red attachments.
-- Both use the named `alerts-default` webhook destination, whose default type is `mattermost`.
+- Both rules use the named `alerts-default` webhook destination, whose default type is `mattermost`.
 - Secret observation is supported but remains disabled until explicitly enabled.
 - Robusta SaaS usage telemetry is disabled for the standalone package workflow.
 
 The readable default is [`examples/alert-config.yaml`](../examples/alert-config.yaml).
 
 > [!NOTE]
-> `ALERT_CONFIG` is optional. Omit it to use these defaults. An override changes profile selection, sink type, and routing; the package continues to own the normalized native-resource playbooks and presentation.
+> `ALERT_CONFIG` is optional. Omit it to use these defaults. An override changes alert-rule selection, sink type, and routing; the package continues to own the normalized native-resource playbooks and presentation.
 
-## Profile schema
+## Alert rule schema
 
 ```yaml
 defaultSinks:                    # Required named-sink fallback
@@ -28,32 +28,32 @@ sinks:                          # Required map of sink name to type and Secret k
     type: mattermost             # Optional; mattermost (default) or slack
     secretKey: alerts-default-url
 
-alertProfiles:                  # Namespaced profiles
+namespacedAlertRules:          # Rules for exact namespaces
   - name: zarf-namespaced-resources
     enabled: true               # Optional; defaults to true
     namespaces: [zarf]          # Required exact namespace names
     resources: [ConfigMap, Deployment]
     # sinks omitted: use defaultSinks
 
-clusterAlertProfiles:           # Cluster-scoped profiles
+clusterAlertRules:              # Rules for cluster-scoped resources
   - name: cluster-scoped-resources
     enabled: true
     resources: [ClusterRole, Node]
-    sinks: [alerts-default]     # Optional profile override
+    sinks: [alerts-default]     # Optional rule override
 ```
 
-Validation rejects unknown fields, duplicate or invalid profile names, empty collections, unsupported resource types, invalid exact namespaces, and undefined sink references. Invalid configuration prevents the relay from becoming Ready rather than silently dropping intended alerts.
+Validation rejects unknown fields, duplicate or invalid rule names, empty collections, unsupported resource types, invalid exact namespaces, and undefined sink references. Invalid configuration prevents the relay from becoming Ready rather than silently dropping intended alerts.
 
-### Sink behavior
+### Rule and sink behavior
 
-- A profile without `sinks` uses `defaultSinks`.
-- A profile may select one or more named sinks.
-- Multiple profiles may share a sink.
-- If multiple matching profiles select different sinks, the relay sends once to each unique sink.
+- A rule without `sinks` uses `defaultSinks`.
+- A rule may select one or more named sinks.
+- Multiple rules may share a sink.
+- If multiple matching rules select different sinks, the relay sends once to each unique sink.
 - Sink names never contain webhook URLs. They reference keys in the external Secret.
 - `type` selects `mattermost` or `slack` rendering and defaults to `mattermost` when omitted.
-- Mattermost and Slack sinks can be selected by the same profile; the relay renders each destination independently.
-- Events that do not match an enabled profile are acknowledged and dropped without external delivery.
+- Mattermost and Slack sinks can be selected by the same rule; the relay renders each destination independently.
+- Events that do not match an enabled rule are acknowledged and dropped without external delivery.
 
 ## Configure the webhook Secret
 
@@ -82,7 +82,7 @@ There are two supported deployment paths. In both cases, `ALERT_CONFIG` is a JSO
 
 ### Direct Zarf package deployment
 
-Keep profiles readable as YAML and convert them to compact JSON with `yq`:
+Keep alert rules readable as YAML and convert them to compact JSON with `yq`:
 
 ```bash
 ALERT_CONFIG="$(yq -o=json -I=0 examples/alert-config.yaml)"
@@ -108,25 +108,25 @@ variables:
       {
         "defaultSinks": ["alerts-default"],
         "sinks": {"alerts-default": {"type": "mattermost", "secretKey": "alerts-default-url"}},
-        "alertProfiles": [
+        "namespacedAlertRules": [
           {
             "name": "application-resources",
             "namespaces": ["application"],
             "resources": ["ConfigMap", "Deployment", "Service"]
           }
         ],
-        "clusterAlertProfiles": []
+        "clusterAlertRules": []
       }
 ```
 
 A complete copyable block is available at [`examples/uds-config.yaml`](../examples/uds-config.yaml). Do not commit webhook URLs or `ROBUSTA_SIGNING_KEY` values to this file.
 
-## Add namespace profiles
+## Add namespaced alert rules
 
-To add another namespace with the default sink, add another profile and omit `sinks`:
+To add another namespace with the default sink, add another rule and omit `sinks`:
 
 ```yaml
-alertProfiles:
+namespacedAlertRules:
   - name: application-resources
     namespaces:
       - application
@@ -137,7 +137,7 @@ alertProfiles:
       - Service
 ```
 
-One profile can apply the same resource policy to multiple exact namespaces:
+One rule can apply the same resource policy to multiple exact namespaces:
 
 ```yaml
   - name: application-team-resources
@@ -145,7 +145,7 @@ One profile can apply the same resource policy to multiple exact namespaces:
     resources: [Deployment, Service, StatefulSet]
 ```
 
-Namespace matching is exact. A profile for `application` does not match `application-dev`.
+Namespace matching is exact. A rule for `application` does not match `application-dev`.
 
 ## Supported resources
 
@@ -172,11 +172,11 @@ Namespace matching is exact. A profile for `application` does not match `applica
 - `Node`
 - `PersistentVolume`
 
-Every resource uses the same bounded attachment content—environment, namespace or `cluster-scoped`, resource, kind, scope, severity, matching profile, a resource-aware change section, and Robusta footer—with destination-specific markup.
+Every resource uses the same bounded attachment content—environment, namespace or `cluster-scoped`, resource, kind, scope, severity, matching alert rule, a resource-aware change section, and Robusta footer—with destination-specific markup.
 
 ## Secret alerts
 
-Secret observation is disabled by default. To use `Secret` in a profile, also deploy with:
+Secret observation is disabled by default. To use `Secret` in an alert rule, also deploy with:
 
 ```bash
 --set-variables WATCH_SECRETS=true
@@ -190,13 +190,13 @@ Robusta/Kubewatch 0.48.0 emits Secret metadata and type changes, but intentional
 - `ROBUSTA_ACCOUNT_ID`: Optional Robusta account ID.
 - `ROBUSTA_SIGNING_KEY`: Optional signing key; supply securely at deployment time.
 - `ALERT_ENVIRONMENT`: Attachment environment label; default `production`.
-- `ALERT_CONFIG`: Compact JSON profile configuration; defaults to the two enabled profiles above.
+- `ALERT_CONFIG`: Compact JSON alert-rule configuration; defaults to the two enabled rules above.
 - `WATCH_SECRETS`: Enables Secret observation; default `false`.
 
 ## Advanced custom playbooks
 
-The generated native-resource playbooks are package internals. Advanced maintainers may add separate Robusta playbooks, but custom playbooks are not required for profile-based native resource alerting.
+The generated native-resource playbooks are package internals. Advanced maintainers may add separate Robusta playbooks, but custom playbooks are not required for rule-based native resource alerting.
 
 ## Test support package
 
-The isolated package in `tests/zarf.yaml` includes an in-cluster webhook receiver and a test-only webhook Secret. CI deploys it alongside the normal upstream Robusta package, changes a ConfigMap in the default `zarf` profile, and verifies independently rendered Mattermost and Slack attachments titled `ConfigMap changed`.
+The isolated package in `tests/zarf.yaml` includes an in-cluster webhook receiver and a test-only webhook Secret. CI deploys it alongside the normal upstream Robusta package, changes a ConfigMap matched by the default `zarf` rule, and verifies independently rendered Mattermost and Slack attachments titled `ConfigMap changed`.

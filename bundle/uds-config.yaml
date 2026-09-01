@@ -22,7 +22,7 @@ variables:
             "secretKey": "alerts-slack-url"
           }
         },
-        "alertProfiles": [
+        "namespacedAlertRules": [
           {
             "name": "zarf-namespaced-resources",
             "enabled": true,
@@ -30,7 +30,7 @@ variables:
             "resources": ["ConfigMap", "DaemonSet", "Deployment", "HorizontalPodAutoscaler", "Ingress", "Job", "Pod", "ReplicaSet", "Service", "ServiceAccount", "StatefulSet"]
           }
         ],
-        "clusterAlertProfiles": [
+        "clusterAlertRules": [
           {
             "name": "cluster-scoped-resources",
             "enabled": true,

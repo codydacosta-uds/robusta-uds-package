@@ -19,7 +19,7 @@ variables:
             "secretKey": "alerts-default-url"
           }
         },
-        "alertProfiles": [
+        "namespacedAlertRules": [
           {
             "name": "application-resources",
             "enabled": true,
@@ -27,7 +27,7 @@ variables:
             "resources": ["ConfigMap", "Deployment", "Ingress", "Service"]
           }
         ],
-        "clusterAlertProfiles": [
+        "clusterAlertRules": [
           {
             "name": "cluster-scoped-resources",
             "enabled": true,

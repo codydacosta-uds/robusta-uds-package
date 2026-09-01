@@ -8,7 +8,7 @@ additionalNetworkAllow: []
 alertEnvironment: production
 watchSecrets: false
 
-# JSON is used so the complete profile collection can be supplied through the
+# JSON is used so the complete alert-rule collection can be supplied through the
 # Zarf ALERT_CONFIG variable without requiring users to write Robusta playbooks.
 alertConfig: >-
-  {"defaultSinks":["alerts-default"],"sinks":{"alerts-default":{"type":"mattermost","secretKey":"alerts-default-url"}},"alertProfiles":[{"name":"zarf-namespaced-resources","enabled":true,"namespaces":["zarf"],"resources":["ConfigMap","DaemonSet","Deployment","HorizontalPodAutoscaler","Ingress","Job","Pod","ReplicaSet","Service","ServiceAccount","StatefulSet"]}],"clusterAlertProfiles":[{"name":"cluster-scoped-resources","enabled":true,"resources":["ClusterRole","ClusterRoleBinding","Namespace","Node","PersistentVolume"]}]}
+  {"defaultSinks":["alerts-default"],"sinks":{"alerts-default":{"type":"mattermost","secretKey":"alerts-default-url"}},"namespacedAlertRules":[{"name":"zarf-namespaced-resources","enabled":true,"namespaces":["zarf"],"resources":["ConfigMap","DaemonSet","Deployment","HorizontalPodAutoscaler","Ingress","Job","Pod","ReplicaSet","Service","ServiceAccount","StatefulSet"]}],"clusterAlertRules":[{"name":"cluster-scoped-resources","enabled":true,"resources":["ClusterRole","ClusterRoleBinding","Namespace","Node","PersistentVolume"]}]}
