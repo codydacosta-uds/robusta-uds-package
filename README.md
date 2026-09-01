@@ -77,6 +77,16 @@ Robusta's upstream webhook sink is configured internally to send normalized find
 
 The destination model is extensible; additional providers such as Teams or Discord require a validated renderer before they are advertised as supported.
 
+## Alert examples
+
+**Namespaced resource alert**
+
+![Namespaced Istio Deployment resource alert](docs/assets/robusta-namespaced-alert.png)
+
+**Cluster-scoped resource alert**
+
+![Cluster-scoped Istio RBAC alert](docs/assets/robusta-cluster-alert.png)
+
 ## Prerequisites
 
 - A Kubernetes cluster with UDS Core installed.
