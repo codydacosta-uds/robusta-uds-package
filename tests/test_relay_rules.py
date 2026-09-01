@@ -6,6 +6,7 @@ import json
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import MagicMock, patch
 
 ROOT = Path(__file__).parents[1]
 spec = importlib.util.spec_from_file_location("relay", ROOT / "chart/files/relay.py")
@@ -226,6 +227,35 @@ class RelayRulesTest(unittest.TestCase):
                     relay.sink_url(CONFIG, "team-alerts"),
                     "https://alerts.example/hooks/test",
                 )
+            finally:
+                relay.SINK_DIRECTORY = previous
+
+    def test_delivery_retries_transient_failure(self):
+        response = MagicMock()
+        response.__enter__.return_value.status = 200
+        with tempfile.TemporaryDirectory() as directory:
+            previous = relay.SINK_DIRECTORY
+            relay.SINK_DIRECTORY = Path(directory)
+            try:
+                (Path(directory) / "team-url").write_text("https://alerts.example/hooks/test")
+                with patch.object(relay, "urlopen", side_effect=[TimeoutError("temporary"), response]) as request, patch.object(relay.time, "sleep") as sleep:
+                    relay.deliver_alert("team-alerts", {"attachments": []}, CONFIG)
+                self.assertEqual(request.call_count, 2)
+                sleep.assert_called_once_with(1)
+            finally:
+                relay.SINK_DIRECTORY = previous
+
+    def test_delivery_stops_after_three_attempts(self):
+        with tempfile.TemporaryDirectory() as directory:
+            previous = relay.SINK_DIRECTORY
+            relay.SINK_DIRECTORY = Path(directory)
+            try:
+                (Path(directory) / "team-url").write_text("https://alerts.example/hooks/test")
+                with patch.object(relay, "urlopen", side_effect=TimeoutError("unavailable")) as request, patch.object(relay.time, "sleep") as sleep:
+                    with self.assertRaises(TimeoutError):
+                        relay.deliver_alert("team-alerts", {"attachments": []}, CONFIG)
+                self.assertEqual(request.call_count, 3)
+                self.assertEqual([call.args[0] for call in sleep.call_args_list], [1, 2])
             finally:
                 relay.SINK_DIRECTORY = previous
 

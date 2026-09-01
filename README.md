@@ -26,7 +26,7 @@ kubectl -n robusta create secret generic robusta-alert-webhooks \
 
 ### 2. Deploy
 
-The default configuration monitors configuration drift in the exact `zarf` namespace and selected cluster-scoped resources:
+The default configuration provides workload-health monitoring for UDS Core workloads in the exact `zarf` namespace. It does not notify on routine manifest changes:
 
 ```bash
 PACKAGE=zarf-package-robusta-amd64-<version>-upstream.tar.zst
@@ -50,33 +50,35 @@ The Package should report `Ready`, with these deployments available:
 - `robusta-forwarder`
 - `robusta-alert-relay`
 
-### 4. Send a drift test
+### 4. Send a controlled health test
+
+Use the already-packaged relay image so the test does not require an external registry:
 
 ```bash
-kubectl -n zarf create configmap robusta-getting-started \
-  --from-literal=status=before \
-  --dry-run=client -o yaml | kubectl apply -f -
+IMAGE=$(kubectl -n robusta get deployment robusta-alert-relay \
+  -o jsonpath='{.spec.template.spec.containers[0].image}')
 
-sleep 5
+kubectl -n zarf create deployment robusta-getting-started --image="$IMAGE" \
+  --dry-run=client -o yaml |
+  kubectl set command -f - --local -o yaml -- \
+    python -c 'raise RuntimeError("intentional quick-start test")' |
+  kubectl apply -f -
 
-kubectl -n zarf patch configmap robusta-getting-started \
-  --type=merge -p '{"data":{"status":"after"}}'
-
-kubectl -n zarf delete configmap robusta-getting-started
+# Remove the controlled failure after its CrashLoop notification arrives.
+kubectl -n zarf delete deployment robusta-getting-started
 ```
 
-The update produces a `Configuration drift detected` notification with the exact old/new data field.
+The Deployment receives automatic crash-loop monitoring through the built-in UDS Core Profile. Robusta waits for at least two restarts before notifying.
 
 ## Built-in monitoring
 
-No Profile configuration is required to start. The package includes two Profiles:
+No Profile configuration is required to start. The package includes one deliberately narrow Profile:
 
-- **`zarf-resources`** monitors updates to supported ConfigMaps, workloads, networking resources, Jobs, Pods, Services, and ServiceAccounts in the exact `zarf` namespace.
-- **`cluster-resources`** monitors updates to ClusterRoles, ClusterRoleBindings, Namespaces, Nodes, and PersistentVolumes.
+- **`uds-core-health`** monitors Deployments, StatefulSets, DaemonSets, ReplicaSets, and Jobs in the exact `zarf` namespace for applicable baseline health failures.
 
-Both send to the `alerts-default` Mattermost destination, backed by the `alerts-default-url` key in `robusta-alert-webhooks`. Applicable workload health is automatic. Secret monitoring and lifecycle notifications remain off until configured.
+It sends to the `alerts-default` Mattermost destination, backed by the `alerts-default-url` key in `robusta-alert-webhooks`. It does not enable manifest drift, create/delete notifications, cluster-resource monitoring, standalone Pod monitoring, or Secret watching. Those behaviors require an intentional Profile so a new installation does not produce routine infrastructure noise.
 
-Supplying `PROFILE_CONFIG` replaces these built-in Profiles with the exact application boundaries and destinations you define.
+Supplying `PROFILE_CONFIG` replaces the built-in Profile with the exact application boundaries and destinations you define. Include an equivalent `uds-core-health` Profile in custom configuration when that coverage should remain.
 
 ## Core concepts
 
@@ -194,6 +196,8 @@ Set `defaults: false` to disable the entire baseline. Individual signals can the
 Unscoped upstream health notifications are disabled. Safe Kubernetes Event context is enabled automatically for health findings. Application logs, Prometheus graphs, and node command output are not attached.
 
 Existing Robusta controls reduce repeated noise: crash-loop, image-pull, and eviction findings have four-hour rate limits; OOM findings have a one-hour rate limit; Job failure fires only on transition to Failed. These cooldowns are runner-memory controls, not durable incident state, and reset when the runner restarts. Image-pull findings also wait at least 120 seconds to confirm the failure persists.
+
+For transient destination failures, the package relay makes up to three delivery attempts with one- and two-second delays. Retries are bounded and held only for the current notification; they are not a persistent delivery queue.
 
 ## Alert examples
 

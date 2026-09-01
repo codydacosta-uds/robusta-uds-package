@@ -37,16 +37,15 @@ The complete readable example is [`examples/profile-config.yaml`](../examples/pr
 
 ## Built-in Profiles
 
-When `PROFILE_CONFIG` is empty, the package monitors broad manifest updates through two built-in Profiles:
+When `PROFILE_CONFIG` is empty, the package installs one low-noise Profile:
 
-| Profile | Scope | Resources |
-|---|---|---|
-| `zarf-resources` | Exact `zarf` namespace | Supported namespaced kinds except Secret |
-| `cluster-resources` | Cluster-wide | ClusterRole, ClusterRoleBinding, Namespace, Node, and PersistentVolume |
+| Profile | Scope | Resources | Monitoring |
+|---|---|---|---|
+| `uds-core-health` | Exact `zarf` namespace | Deployment, StatefulSet, DaemonSet, ReplicaSet, and Job | Applicable automatic health signals |
 
-The built-in Profiles use the `alerts-default` Mattermost destination and `alerts-default-url` Secret key. Applicable workloads in the `zarf` Profile receive automatic baseline health monitoring. The built-ins do not enable create/delete notifications or Secret watching.
+The built-in Profile uses the `alerts-default` Mattermost destination and `alerts-default-url` Secret key. It intentionally does not enable manifest drift, create/delete notifications, cluster-resource monitoring, standalone Pod monitoring, or Secret watching. The package cannot infer which of those changes are operationally meaningful for a particular installation.
 
-Supplying `PROFILE_CONFIG` replaces the built-in Profiles; it does not merge with them. Include every Profile and destination the deployment needs.
+Supplying `PROFILE_CONFIG` replaces the built-in Profile; it does not merge with it. Include every Profile and destination the deployment needs. Copy the `uds-core-health` boundary into custom configuration when UDS Core health coverage should remain.
 
 ## What drift means
 
@@ -318,6 +317,8 @@ A Profile without `notify.destinations` uses `defaultDestinations`. Duplicate de
 
 Destination normalization is not durable incident deduplication. Health-trigger cooldowns are documented above; persistent incident state, resolution notifications, maintenance windows, and cross-signal correlation are not currently implemented.
 
+The relay retries a destination request after one second and then after two seconds, for at most three attempts. This protects against brief connection and TLS failures without creating an unbounded retry storm. Retry state is not persisted; a notification that fails all three attempts is logged and returned to Robusta as a delivery failure.
+
 ## Prometheus relationship
 
 Profiles do not replace Prometheus or Grafana. Prometheus remains appropriate for metric-based application behavior such as latency, error rates, saturation, capacity, and SLO conditions. This package focuses on Kubernetes runtime failures, resource changes, Kubernetes context, and notification routing. Existing Prometheus alert rules do not need to be recreated in Profiles; Profile-aware ingestion and enrichment of external Prometheus alerts is not currently implemented.
@@ -366,5 +367,5 @@ Kubewatch intentionally redacts Secret values before comparing old and new objec
 - `ROBUSTA_ACCOUNT_ID`: Optional account ID.
 - `ROBUSTA_SIGNING_KEY`: Optional signing key supplied securely.
 - `ALERT_ENVIRONMENT`: Notification environment label; default `production`.
-- `PROFILE_CONFIG`: Profile JSON. Leave it empty to use the package's built-in `zarf` and cluster-resource Profiles.
+- `PROFILE_CONFIG`: Profile JSON. Leave it empty to use the package's built-in `uds-core-health` Profile.
 - `WATCH_SECRETS`: Explicit Secret-observation gate; default `false`.

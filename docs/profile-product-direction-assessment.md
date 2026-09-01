@@ -86,6 +86,10 @@ Changes answer **what changed** and remain explicit because deployments, replica
 
 Existing lifecycle and semantic drift monitoring remains available when independent change notification is required.
 
+### Low-noise package default
+
+An empty `PROFILE_CONFIG` installs only `uds-core-health`. It applies automatic workload health to Deployments, StatefulSets, DaemonSets, ReplicaSets, and Jobs in the exact `zarf` namespace. Broad manifest drift, lifecycle changes, standalone Pods, Secrets, and cluster-scoped resources remain opt-in because the package cannot infer which changes are meaningful to each installation.
+
 ### Existing noise controls
 
 The exact Robusta `0.48.0` triggers provide:
@@ -99,6 +103,8 @@ The exact Robusta `0.48.0` triggers provide:
 | Job failure | Fires only when the Job transitions into Failed |
 
 These cooldowns are held in runner memory and reset when the runner restarts. They reduce repeated notifications but are not durable incident state.
+
+The relay retries transient destination failures twice, after bounded one- and two-second delays. It does not maintain a persistent delivery queue.
 
 ### Safe context
 

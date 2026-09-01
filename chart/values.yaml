@@ -8,7 +8,7 @@ additionalNetworkAllow: []
 alertEnvironment: production
 watchSecrets: false
 
-# User Profile JSON. Empty uses the built-in Profiles below.
+# User Profile JSON. Empty uses the low-noise UDS Core health Profile below.
 profileConfig: ""
 
 # Accepted internally so existing deployments can be upgraded without changing
@@ -16,4 +16,4 @@ profileConfig: ""
 alertConfig: ""
 
 defaultProfileConfig: >-
-  {"schemaVersion":1,"defaultDestinations":["alerts-default"],"destinations":{"alerts-default":{"type":"mattermost","secretKey":"alerts-default-url"}},"profiles":[{"name":"zarf-resources","scope":{"namespaces":["zarf"]},"resources":{"configmap":{},"daemonset":{},"deployment":{},"horizontalpodautoscaler":{},"ingress":{},"job":{},"pod":{},"replicaset":{},"service":{},"serviceaccount":{},"statefulset":{}},"monitor":{"drift":{"include":["manifest"]}},"context":{"diff":true},"notify":{"severity":"high"}},{"name":"cluster-resources","resources":{"clusterrole":{},"clusterrolebinding":{},"namespace":{},"node":{},"persistentvolume":{}},"monitor":{"drift":{"include":["manifest"]}},"context":{"diff":true},"notify":{"severity":"high"}}]}
+  {"schemaVersion":1,"defaultDestinations":["alerts-default"],"destinations":{"alerts-default":{"type":"mattermost","secretKey":"alerts-default-url"}},"profiles":[{"name":"uds-core-health","scope":{"namespaces":["zarf"]},"resources":{"daemonset":{},"deployment":{},"job":{},"replicaset":{},"statefulset":{}},"notify":{"severity":"high"}}]}

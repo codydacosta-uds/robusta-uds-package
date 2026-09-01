@@ -6,6 +6,7 @@ import json
 import os
 import re
 import sys
+import time
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
 from urllib.parse import urlparse
@@ -24,6 +25,7 @@ YELLOW = "#f2c744"
 RED = "#d24b4b"
 KIND_NAMES = {re.sub(r"[^a-z]", "", kind.lower()): kind for kind in SUPPORTED_RESOURCES}
 PROFILE_MARKER = re.compile(r"^UDS_PROFILE_V2\|([^|]+)\|(change|drift|health)\|([^|]+)\|([^|]+)\|([^|]+)\|(.+)$")
+DELIVERY_RETRY_DELAYS = (1, 2)
 
 
 def value_diff(before, after):
@@ -328,6 +330,31 @@ def route_health(payload, config):
     return alerts, f"{marker['kind']} {marker['namespace']}/{marker['name']}"
 
 
+def deliver_alert(destination, alert, config):
+    """Deliver once, retrying only transient request failures with bounded delays."""
+    request = Request(
+        sink_url(config, destination),
+        data=json.dumps(alert).encode(),
+        headers={"Content-Type": "application/json"},
+    )
+    for attempt in range(len(DELIVERY_RETRY_DELAYS) + 1):
+        try:
+            with urlopen(request, timeout=10) as response:
+                if not 200 <= response.status < 300:
+                    raise RuntimeError(f"destination {destination} returned {response.status}")
+            return
+        except Exception as error:
+            if attempt == len(DELIVERY_RETRY_DELAYS):
+                raise
+            delay = DELIVERY_RETRY_DELAYS[attempt]
+            print(
+                f"Delivery attempt {attempt + 1} failed for [{destination}]: "
+                f"{type(error).__name__}; retrying in {delay}s",
+                flush=True,
+            )
+            time.sleep(delay)
+
+
 class Relay(BaseHTTPRequestHandler):
     def do_POST(self):
         length = int(self.headers.get("Content-Length", "0"))
@@ -344,10 +371,7 @@ class Relay(BaseHTTPRequestHandler):
                 self.end_headers()
                 return
             for destination, alert in alerts:
-                request = Request(sink_url(config, destination), data=json.dumps(alert).encode(), headers={"Content-Type": "application/json"})
-                with urlopen(request, timeout=10) as response:
-                    if not 200 <= response.status < 300:
-                        raise RuntimeError(f"destination {destination} returned {response.status}")
+                deliver_alert(destination, alert, config)
                 print(f"Delivered [{destination}]: {alert['attachments'][0]['fallback']}", flush=True)
             self.send_response(204)
         except Exception as error:

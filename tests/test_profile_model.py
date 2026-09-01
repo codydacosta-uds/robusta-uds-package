@@ -46,6 +46,22 @@ class ProfileModelTest(unittest.TestCase):
         self.assertEqual(first["profiles"][0]["id"], model.profile_id("gitlab-production"))
         self.assertEqual(model.canonical_json(PROFILE), model.canonical_json(PROFILE))
 
+    def test_builtin_profile_is_health_only_and_narrow(self):
+        lines = (ROOT / "chart/values.yaml").read_text().splitlines()
+        index = lines.index("defaultProfileConfig: >-")
+        config = json.loads(lines[index + 1].strip())
+        normalized = model.normalize_config(config)
+        self.assertEqual([profile["name"] for profile in normalized["profiles"]], ["uds-core-health"])
+        profile = normalized["profiles"][0]
+        self.assertEqual(profile["scope"]["namespaces"], ["zarf"])
+        self.assertEqual(
+            [resource["kind"] for resource in profile["resources"]],
+            ["DaemonSet", "Deployment", "Job", "ReplicaSet", "StatefulSet"],
+        )
+        self.assertEqual(profile["monitor"]["changes"]["events"], [])
+        self.assertEqual(profile["monitor"]["drift"]["include"], [])
+        self.assertTrue(all(profile["monitor"]["health"][signal] for signal in model.HEALTH_SIGNALS))
+
     def test_legacy_translates_to_observed_drift_profiles(self):
         normalized = model.normalize_config(LEGACY)
         self.assertEqual(normalized["schemaVersion"], 1)

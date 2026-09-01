@@ -3,7 +3,7 @@
 
 alertEnvironment: ###ZARF_VAR_ALERT_ENVIRONMENT###
 watchSecrets: ###ZARF_VAR_WATCH_SECRETS###
-# Empty PROFILE_CONFIG uses the built-in zarf and cluster-resource Profiles.
+# Empty PROFILE_CONFIG uses the built-in UDS Core workload-health Profile.
 profileConfig: '###ZARF_VAR_PROFILE_CONFIG###'
 # Internal upgrade input for deployments created before Profiles.
 alertConfig: '###ZARF_VAR_ALERT_CONFIG###'
