@@ -21,7 +21,7 @@ In short: an **alert rule** decides what should alert, a **sink** names where it
 > [!WARNING]
 > **Package design note**
 >
-> Defense Unicorns engineers designed alert rules for this package to make Robusta easier to configure. Alert rules are not an upstream Robusta feature; they provide a simpler policy layer over Robusta playbooks, triggers, and sinks. Users declare what to watch and where to send it; the package translates resource events into normalized findings and applies those rules before external delivery.
+> Defense Unicorns engineers designed alert rules for this package to make Robusta easier to configure. Alert rules are not an upstream Robusta feature; they provide a simpler policy layer over Robusta playbooks, triggers, and sinks. Users declare what to watch and where to send it; the package translates resource events into normalized findings and applies those rules before external delivery. Because this configuration contract is package-specific, alert-rule configuration is not directly portable between upstream Robusta and this package. Moving in either direction requires translating the watch and routing configuration rather than reusing `ALERT_CONFIG` unchanged.
 
 ## Quick start
 
