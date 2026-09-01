@@ -10,88 +10,152 @@ variables:
     ALERT_ENVIRONMENT: "test"
     WATCH_SECRETS: "false"
     PROFILE_CONFIG: |-
-      {
-        "schemaVersion": 1,
-        "defaultDestinations": ["alerts-default", "alerts-slack"],
-        "destinations": {
-          "alerts-default": {"type": "mattermost", "secretKey": "alerts-default-url"},
-          "alerts-slack": {"type": "slack", "secretKey": "alerts-slack-url"}
-        },
-        "profiles": [
-          {
-            "name": "semantic-drift-and-lifecycle",
-            "scope": {"namespaces": ["zarf"], "labels": {"monitor": "profile-v2"}},
-            "resources": {"configmap": {}, "deployment": {}},
-            "monitor": {
-              "changes": {"events": ["create", "delete"]},
-              "drift": {"include": ["image", "configuration"]},
-              "health": {"defaults": false}
-            },
-            "context": {"diff": true},
-            "notify": {"severity": "high"}
-          },
-          {
-            "name": "other-zarf-resources",
-            "scope": {"namespaces": ["zarf"]},
-            "resources": {
-              "daemonset": {}, "horizontalpodautoscaler": {}, "ingress": {}, "job": {},
-              "pod": {}, "replicaset": {}, "service": {}, "serviceaccount": {}, "statefulset": {}
-            },
-            "monitor": {"drift": {"include": ["manifest"]}, "health": {"defaults": false}},
-            "context": {"diff": true},
-            "notify": {"severity": "high"}
-          },
-          {
-            "name": "workload-health",
-            "scope": {"namespaces": ["zarf"], "labels": {"monitor": "profile-v2-health"}},
-            "resources": {"pod": {}, "job": {}},
-            "monitor": {
-              "health": {
-                "crashLoop": true,
-                "imagePullFailure": true,
-                "oomKill": true,
-                "jobFailure": true,
-                "podEviction": true
-              }
-            },
-            "context": {"kubernetesEvents": true},
-            "notify": {"severity": "high"}
-          },
-          {
-            "name": "owned-default-health",
-            "scope": {"namespaces": ["zarf"]},
-            "resources": {
-              "deployment": {"names": ["baseline-crash", "baseline-image", "baseline-oom", "baseline-evict"]},
-              "statefulset": {"names": ["baseline-stateful"]},
-              "daemonset": {"names": ["baseline-daemon"]},
-              "replicaset": {"names": ["baseline-replica"]},
-              "job": {"names": ["baseline-job"]}
-            },
-            "notify": {"severity": "high"}
-          },
-          {
-            "name": "health-oom-optout",
-            "scope": {"namespaces": ["zarf"]},
-            "resources": {"deployment": {"names": ["optout-oom"]}},
-            "monitor": {"health": {"oomKill": false}},
-            "notify": {"severity": "high"}
-          },
-          {
-            "name": "cluster-resources",
-            "resources": {"clusterrolebinding": {}, "namespace": {}, "node": {}, "persistentvolume": {}},
-            "monitor": {"drift": {"include": ["manifest"]}},
-            "context": {"diff": true},
-            "notify": {"severity": "high"}
-          },
-          {
-            "name": "cluster-permission-drift",
-            "resources": {"clusterrole": {"names": ["profile-v2-role"]}},
-            "monitor": {
-              "changes": {"events": ["create", "delete"]},
-              "drift": {"include": ["permissions"]}
-            },
-            "context": {"diff": true},
-            "notify": {"severity": "high"}
-          }
-        ]
-      }
+      schemaVersion: 1
+      defaultDestinations:
+      - alerts-default
+      - alerts-slack
+      destinations:
+        alerts-default:
+          type: mattermost
+          secretKey: alerts-default-url
+        alerts-slack:
+          type: slack
+          secretKey: alerts-slack-url
+      profiles:
+      - name: semantic-drift-and-lifecycle
+        scope:
+          namespaces:
+          - zarf
+          labels:
+            monitor: profile-v2
+        resources:
+          configmap: {}
+          deployment: {}
+        monitor:
+          changes:
+            events:
+            - create
+            - delete
+          drift:
+            include:
+            - image
+            - configuration
+          health:
+            defaults: false
+        context:
+          diff: true
+        notify:
+          severity: high
+      - name: other-zarf-resources
+        scope:
+          namespaces:
+          - zarf
+        resources:
+          daemonset: {}
+          horizontalpodautoscaler: {}
+          ingress: {}
+          job: {}
+          pod: {}
+          replicaset: {}
+          service: {}
+          serviceaccount: {}
+          statefulset: {}
+        monitor:
+          drift:
+            include:
+            - manifest
+          health:
+            defaults: false
+        context:
+          diff: true
+        notify:
+          severity: high
+      - name: workload-health
+        scope:
+          namespaces:
+          - zarf
+          labels:
+            monitor: profile-v2-health
+        resources:
+          pod: {}
+          job: {}
+        monitor:
+          health:
+            crashLoop: true
+            imagePullFailure: true
+            oomKill: true
+            jobFailure: true
+            podEviction: true
+        context:
+          kubernetesEvents: true
+        notify:
+          severity: high
+      - name: owned-default-health
+        scope:
+          namespaces:
+          - zarf
+        resources:
+          deployment:
+            names:
+            - baseline-crash
+            - baseline-image
+            - baseline-oom
+            - baseline-evict
+          statefulset:
+            names:
+            - baseline-stateful
+          daemonset:
+            names:
+            - baseline-daemon
+          replicaset:
+            names:
+            - baseline-replica
+          job:
+            names:
+            - baseline-job
+        notify:
+          severity: high
+      - name: health-oom-optout
+        scope:
+          namespaces:
+          - zarf
+        resources:
+          deployment:
+            names:
+            - optout-oom
+        monitor:
+          health:
+            oomKill: false
+        notify:
+          severity: high
+      - name: cluster-resources
+        resources:
+          clusterrolebinding: {}
+          namespace: {}
+          node: {}
+          persistentvolume: {}
+        monitor:
+          drift:
+            include:
+            - manifest
+        context:
+          diff: true
+        notify:
+          severity: high
+      - name: cluster-permission-drift
+        resources:
+          clusterrole:
+            names:
+            - profile-v2-role
+        monitor:
+          changes:
+            events:
+            - create
+            - delete
+          drift:
+            include:
+            - permissions
+        context:
+          diff: true
+        notify:
+          severity: high

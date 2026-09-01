@@ -3,30 +3,19 @@
 
 schemaVersion: 1
 
-defaultDestinations:
-  - alerts-default
-
-destinations:
-  alerts-default:
-    type: mattermost
-    secretKey: alerts-default-url
-
 profiles:
-  - name: application-production
-    enabled: true
+  - name: gitlab
     scope:
       namespaces:
-        - application
-      labels:
-        app.kubernetes.io/part-of: application
+        - gitlab
     resources:
       deployment:
         names:
-          - application-web
-          - application-worker
+          - gitlab-webservice
+          - gitlab-sidekiq
       statefulset:
         names:
-          - application-data
+          - gitaly
       configmap: {}
       job: {}
     # Applicable health monitoring is automatic. Changes are intentionally
@@ -41,7 +30,3 @@ profiles:
     context:
       diff: true
       kubernetesEvents: true
-    notify:
-      severity: high
-      destinations:
-        - alerts-default

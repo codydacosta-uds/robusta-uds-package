@@ -33,6 +33,8 @@ profiles:
 
 Resource keys are case-insensitive during validation. Documentation uses lowercase consistently. `{}` or an omitted value selects all matching resources of that type. Names apply only to their resource type.
 
+Users supply this YAML directly through `PROFILE_CONFIG`. When destination fields are omitted, the package injects the standard `alerts-default` Mattermost destination backed by `alerts-default-url`; JSON remains an internal and compatibility transport rather than the required authoring format.
+
 ### Automatic baseline health
 
 `monitor.health` is optional. Applicable signals are enabled automatically:

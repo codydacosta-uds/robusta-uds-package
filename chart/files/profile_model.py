@@ -95,6 +95,13 @@ def profile_id(name):
 
 def _validate_destinations(config):
     destinations = config.get("destinations")
+    if destinations is None:
+        destinations = {
+            "alerts-default": {
+                "type": "mattermost",
+                "secretKey": "alerts-default-url",
+            }
+        }
     if not isinstance(destinations, dict) or not destinations:
         raise ValueError("destinations must define at least one named destination")
     normalized = {}
@@ -109,7 +116,15 @@ def _validate_destinations(config):
         if destination_type not in {"mattermost", "slack"}:
             raise ValueError(f"destination {name} type must be mattermost or slack")
         normalized[name] = {"type": destination_type, "secretKey": secret_key}
-    defaults = _named_list(config.get("defaultDestinations"), "defaultDestinations", normalized)
+    defaults = config.get("defaultDestinations")
+    if defaults is None:
+        if "alerts-default" in normalized:
+            defaults = ["alerts-default"]
+        elif len(normalized) == 1:
+            defaults = [next(iter(normalized))]
+        else:
+            raise ValueError("defaultDestinations is required when multiple custom destinations are defined")
+    defaults = _named_list(defaults, "defaultDestinations", normalized)
     return normalized, defaults
 
 

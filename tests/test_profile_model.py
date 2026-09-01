@@ -62,6 +62,29 @@ class ProfileModelTest(unittest.TestCase):
         self.assertEqual(profile["monitor"]["drift"]["include"], [])
         self.assertTrue(all(profile["monitor"]["health"][signal] for signal in model.HEALTH_SIGNALS))
 
+    def test_simple_profile_uses_standard_destination_defaults(self):
+        candidate = copy.deepcopy(PROFILE)
+        candidate.pop("defaultDestinations")
+        candidate.pop("destinations")
+        normalized = model.normalize_config(candidate)
+        self.assertEqual(normalized["defaultDestinations"], ["alerts-default"])
+        self.assertEqual(
+            normalized["destinations"],
+            {"alerts-default": {"type": "mattermost", "secretKey": "alerts-default-url"}},
+        )
+        self.assertEqual(normalized["profiles"][0]["notify"]["destinations"], ["alerts-default"])
+
+    def test_single_custom_destination_becomes_default(self):
+        candidate = copy.deepcopy(PROFILE)
+        candidate.pop("defaultDestinations")
+        candidate["destinations"] = {"team": {"type": "slack", "secretKey": "team-url"}}
+        normalized = model.normalize_config(candidate)
+        self.assertEqual(normalized["defaultDestinations"], ["team"])
+
+        candidate["destinations"]["other"] = {"type": "mattermost", "secretKey": "other-url"}
+        with self.assertRaisesRegex(ValueError, "defaultDestinations is required"):
+            model.normalize_config(candidate)
+
     def test_legacy_translates_to_observed_drift_profiles(self):
         normalized = model.normalize_config(LEGACY)
         self.assertEqual(normalized["schemaVersion"], 1)

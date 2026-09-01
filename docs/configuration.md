@@ -10,30 +10,23 @@ Profiles are the package's user-facing monitoring API. A Profile defines the Kub
 ```yaml
 schemaVersion: 1
 
-defaultDestinations: [alerts-default]
-
-destinations:
-  alerts-default:
-    type: mattermost
-    secretKey: alerts-default-url
-
 profiles:
-  - name: application-production
+  - name: gitlab
     scope:
       namespaces:
-        - application
+        - gitlab
     resources:
       deployment:
         names:
-          - application-web
-          - application-worker
+          - gitlab-webservice
+          - gitlab-sidekiq
       statefulset:
         names:
-          - application-data
+          - gitaly
       configmap: {}
 ```
 
-The complete readable example is [`examples/profile-config.yaml`](../examples/profile-config.yaml).
+This minimal GitLab Profile receives applicable workload-health defaults and the standard Mattermost destination automatically. Adjust names to the exact resources produced by the installed GitLab package or Helm release. The complete readable example adds intentional lifecycle and semantic drift monitoring in [`examples/profile-config.yaml`](../examples/profile-config.yaml).
 
 ## Built-in Profiles
 
@@ -76,18 +69,24 @@ Those capabilities require an audit or desired-state source that this package do
 | Field | Required | Meaning |
 |---|---:|---|
 | `schemaVersion` | Yes | Must be `1` |
-| `defaultDestinations` | Yes | Destination names used when a Profile omits an override |
-| `destinations` | Yes | Logical destination names mapped to external Secret keys |
+| `defaultDestinations` | No | Destination names used when a Profile omits an override; defaults to `alerts-default` |
+| `destinations` | No | Logical destination names mapped to external Secret keys; defaults to the standard Mattermost destination |
 | `profiles` | Yes | One or more Profile definitions |
 
 ### Destination
 
+Most users omit destination configuration. The package then uses:
+
 ```yaml
+defaultDestinations: [alerts-default]
+
 destinations:
   alerts-default:
-    type: mattermost       # mattermost or slack
+    type: mattermost
     secretKey: alerts-default-url
 ```
+
+Define these fields only for a different or additional Mattermost/Slack destination. A single custom destination becomes the default automatically; multiple custom destinations require `defaultDestinations`.
 
 Webhook URLs never belong in Profile configuration. `secretKey` refers to a key in the externally managed `robusta-alert-webhooks` Secret.
 
@@ -95,7 +94,7 @@ Webhook URLs never belong in Profile configuration. `secretKey` refers to a key 
 
 ```yaml
 profiles:
-  - name: application-production
+  - name: gitlab
     enabled: true
     scope: {}
     resources: {}
@@ -337,10 +336,10 @@ For multiple destinations, add one key per destination. Never commit webhook URL
 
 ## Package deployment
 
-Convert readable Profile YAML to compact JSON:
+Supply the readable Profile YAML directly:
 
 ```bash
-PROFILE_CONFIG="$(yq -o=json -I=0 examples/profile-config.yaml)"
+PROFILE_CONFIG="$(<examples/profile-config.yaml)"
 
 uds zarf package deploy zarf-package-robusta-amd64-<version>-upstream.tar.zst \
   --set-variables CLUSTER_NAME=my-cluster \
@@ -349,7 +348,7 @@ uds zarf package deploy zarf-package-robusta-amd64-<version>-upstream.tar.zst \
   --confirm
 ```
 
-Or use the multiline JSON example in [`examples/uds-config.yaml`](../examples/uds-config.yaml).
+Or merge the multiline YAML example in [`examples/uds-config.yaml`](../examples/uds-config.yaml) into the environment configuration.
 
 ## Secret observation
 
@@ -367,5 +366,5 @@ Kubewatch intentionally redacts Secret values before comparing old and new objec
 - `ROBUSTA_ACCOUNT_ID`: Optional account ID.
 - `ROBUSTA_SIGNING_KEY`: Optional signing key supplied securely.
 - `ALERT_ENVIRONMENT`: Notification environment label; default `production`.
-- `PROFILE_CONFIG`: Profile JSON. Leave it empty to use the package's built-in `uds-core-health` Profile.
+- `PROFILE_CONFIG`: Profile YAML (JSON remains accepted for compatibility). Leave it empty to use the package's built-in `uds-core-health` Profile.
 - `WATCH_SECRETS`: Explicit Secret-observation gate; default `false`.

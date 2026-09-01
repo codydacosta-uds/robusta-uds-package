@@ -28,9 +28,11 @@ variables:
   # Empty uses the package's low-noise UDS Core workload-health Profile.
   - name: PROFILE_CONFIG
     default: ""
+    autoIndent: true
   # Internal upgrade input; new deployments configure PROFILE_CONFIG.
   - name: ALERT_CONFIG
     default: ""
+    autoIndent: true
   - name: WATCH_SECRETS
     description: Enable opt-in Kubewatch observation for Secret updates
     default: "false"

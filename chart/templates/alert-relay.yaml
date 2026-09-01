@@ -1,6 +1,7 @@
 # Copyright 2025 Defense Unicorns
 # SPDX-License-Identifier: AGPL-3.0-or-later OR LicenseRef-Defense-Unicorns-Commercial
-{{- $profileConfig := coalesce .Values.profileConfig .Values.alertConfig .Values.defaultProfileConfig }}
+{{- $profileConfigInput := coalesce .Values.profileConfig .Values.alertConfig .Values.defaultProfileConfig }}
+{{- $profileConfig := $profileConfigInput | fromYaml | toJson }}
 apiVersion: v1
 kind: ConfigMap
 metadata:

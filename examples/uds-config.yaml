@@ -1,7 +1,7 @@
 # Copyright 2026 Defense Unicorns
 # SPDX-License-Identifier: AGPL-3.0-or-later OR LicenseRef-Defense-Unicorns-Commercial
 
-# Example package variables to merge into an environment uds-config.
+# Merge these package variables into an environment uds-config.
 # Webhook URLs remain in the external robusta-alert-webhooks Secret.
 variables:
   robusta:
@@ -9,33 +9,35 @@ variables:
     ALERT_ENVIRONMENT: "development"
     WATCH_SECRETS: "false"
     PROFILE_CONFIG: |-
-      {
-        "schemaVersion": 1,
-        "defaultDestinations": ["alerts-default"],
-        "destinations": {
-          "alerts-default": {
-            "type": "mattermost",
-            "secretKey": "alerts-default-url"
-          }
-        },
-        "profiles": [
-          {
-            "name": "application-production",
-            "scope": {
-              "namespaces": ["application"],
-              "labels": {"app.kubernetes.io/part-of": "application"}
-            },
-            "resources": {
-              "deployment": {"names": ["application-web", "application-worker"]},
-              "statefulset": {"names": ["application-data"]},
-              "configmap": {}
-            },
-            "monitor": {
-              "changes": {"events": ["create", "delete"]},
-              "drift": {"include": ["image", "replicas", "resources", "configuration"]}
-            },
-            "context": {"diff": true, "kubernetesEvents": true},
-            "notify": {"severity": "high"}
-          }
-        ]
-      }
+      schemaVersion: 1
+
+      profiles:
+        - name: gitlab
+          scope:
+            namespaces:
+              - gitlab
+          resources:
+            deployment:
+              names:
+                - gitlab-webservice
+                - gitlab-sidekiq
+            statefulset:
+              names:
+                - gitaly
+            configmap: {}
+          monitor:
+            changes:
+              events:
+                - create
+                - delete
+            drift:
+              include:
+                - image
+                - replicas
+                - resources
+                - configuration
+          context:
+            diff: true
+            kubernetesEvents: true
+          notify:
+            severity: high

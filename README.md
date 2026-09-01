@@ -107,38 +107,35 @@ Supplying `PROFILE_CONFIG` replaces the built-in Profile with the exact applicat
 | **Destination** | A logical Mattermost or Slack target whose URL is stored in the external Secret. |
 | **Context** | Safe supporting details such as old/new diffs and Kubernetes Events. |
 
-## Profile example
+## GitLab Profile example
+
+A GitLab owner only describes which Kubernetes resources make up GitLab:
 
 ```yaml
 schemaVersion: 1
 
-defaultDestinations: [alerts-default]
-
-destinations:
-  alerts-default:
-    type: mattermost
-    secretKey: alerts-default-url
-
 profiles:
-  - name: application-production
+  - name: gitlab
     scope:
       namespaces:
-        - application
+        - gitlab
     resources:
       deployment:
         names:
-          - application-web
-          - application-worker
+          - gitlab-webservice
+          - gitlab-sidekiq
       statefulset:
         names:
-          - application-data
+          - gitaly
       configmap: {}
 ```
 
-Start from [`examples/profile-config.yaml`](examples/profile-config.yaml), convert it to JSON, and supply it through `PROFILE_CONFIG`:
+That is enough to automatically monitor Pods owned by the selected GitLab Deployments and StatefulSet for crash loops, image-pull failures, OOM kills, and eviction. The user does not configure Robusta triggers, playbooks, ownership traversal, cooldowns, or the standard Mattermost destination. Resource names should be adjusted to the exact names produced by the installed GitLab package or Helm release.
+
+Start from [`examples/profile-config.yaml`](examples/profile-config.yaml) and supply the YAML directly through `PROFILE_CONFIG`:
 
 ```bash
-PROFILE_CONFIG="$(yq -o=json -I=0 examples/profile-config.yaml)"
+PROFILE_CONFIG="$(<examples/profile-config.yaml)"
 
 uds zarf package deploy "$PACKAGE" \
   --set-variables CLUSTER_NAME=my-cluster \
@@ -147,11 +144,13 @@ uds zarf package deploy "$PACKAGE" \
   --confirm
 ```
 
+When `destinations` is omitted, the package uses the standard `alerts-default` Mattermost destination and reads its URL from `alerts-default-url` in the external Secret. Users define destination objects only when they need a different or additional destination.
+
 A complete UDS configuration example is available at [`examples/uds-config.yaml`](examples/uds-config.yaml).
 
 Resource types are written in lowercase for readability. Matching is case-insensitive, so `deployment`, `Deployment`, and `DEPLOYMENT` resolve to the same Kubernetes type. `{}` selects every matching resource of that type; `names` selects exact objects only.
 
-Without any health configuration, this Profile automatically monitors Pods owned by the selected Deployments and StatefulSet for crash loops, image-pull failures, OOM kills, and eviction. The ConfigMap receives no workload-health monitoring. Routine resource changes are not notified unless the Profile explicitly configures them.
+The ConfigMap receives no workload-health monitoring. Routine GitLab changes are not notified unless the Profile explicitly configures lifecycle events or semantic drift.
 
 ## Drift semantics
 

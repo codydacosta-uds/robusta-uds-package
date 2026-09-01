@@ -4,7 +4,7 @@ All notable changes to this package will be documented here.
 
 ## 0.48.0-uds.0 - 2026-09-01
 
-- Add application Profiles with lowercase per-resource configuration.
+- Add simple YAML application Profiles with lowercase per-resource configuration and automatic standard Mattermost destination defaults.
 - Enable applicable crash-loop, image-pull, OOM, eviction, and Job-failure monitoring by default.
 - Resolve Pod ownership through Deployment/ReplicaSet, StatefulSet, DaemonSet, ReplicaSet, Job, and standalone Pod relationships.
 - Preserve explicit lifecycle and semantic drift monitoring with typed Mattermost and Slack delivery.
