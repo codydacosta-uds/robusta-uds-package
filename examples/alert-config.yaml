@@ -1,13 +1,14 @@
 # Copyright 2026 Defense Unicorns
 # SPDX-License-Identifier: AGPL-3.0-or-later OR LicenseRef-Defense-Unicorns-Commercial
 
-# Named sinks map friendly names to keys in Secret robusta-mattermost-webhook.
+# Named sinks map logical destinations to keys in Secret robusta-alert-webhooks.
 defaultSinks:
-  - mattermost-default
+  - alerts-default
 
 sinks:
-  mattermost-default:
-    secretKey: url
+  alerts-default:
+    type: mattermost # Change to slack for a Slack incoming webhook.
+    secretKey: alerts-default-url
 
 # Namespaced profiles use exact namespace names. Omitting sinks uses defaultSinks.
 alertProfiles:

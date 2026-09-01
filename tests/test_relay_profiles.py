@@ -13,10 +13,10 @@ relay = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(relay)
 
 CONFIG = {
-    "defaultSinks": ["mattermost-default"],
+    "defaultSinks": ["alerts-default"],
     "sinks": {
-        "mattermost-default": {"secretKey": "url"},
-        "team-alerts": {"secretKey": "team-url"},
+        "alerts-default": {"type": "mattermost", "secretKey": "alerts-default-url"},
+        "team-alerts": {"type": "slack", "secretKey": "team-url"},
     },
     "alertProfiles": [
         {
@@ -83,6 +83,9 @@ EXPECTED_FORMAT = {
 class RelayProfilesTest(unittest.TestCase):
     def test_configuration_is_valid(self):
         self.assertIs(relay.validate_config(CONFIG), CONFIG)
+        default_type = json.loads(json.dumps(CONFIG))
+        default_type["sinks"]["alerts-default"].pop("type")
+        self.assertIs(relay.validate_config(default_type), default_type)
 
     def test_every_supported_resource_routes_and_renders(self):
         self.assertEqual(set(PATHS), relay.SUPPORTED_RESOURCES)
@@ -91,7 +94,7 @@ class RelayProfilesTest(unittest.TestCase):
                 cluster = kind in relay.CLUSTER_RESOURCES
                 namespace = "cluster-scoped" if cluster else "zarf"
                 sinks, profiles, is_cluster = relay.matching_sinks(kind, namespace, CONFIG)
-                self.assertEqual(sinks, ["mattermost-default"])
+                self.assertEqual(sinks, ["alerts-default"])
                 self.assertEqual(is_cluster, cluster)
                 message = f"{kind} changed: {namespace}/example\n*{path}*: before ==> after"
                 alert = relay.render_alert(message, relay.RED if cluster else relay.YELLOW, profiles)
@@ -126,6 +129,24 @@ class RelayProfilesTest(unittest.TestCase):
         bad_sink["alertProfiles"][0]["sinks"] = ["missing"]
         with self.assertRaisesRegex(ValueError, "unsupported values"):
             relay.validate_config(bad_sink)
+        bad_type = json.loads(json.dumps(CONFIG))
+        bad_type["sinks"]["alerts-default"]["type"] = "teams"
+        with self.assertRaisesRegex(ValueError, "mattermost or slack"):
+            relay.validate_config(bad_type)
+
+    def test_slack_rendering_uses_slack_markdown(self):
+        text = relay.render_alert(
+            "ConfigMap changed: zarf/example\n*data.status*: before ==> after",
+            profiles=["zarf-namespaced-resources"],
+            sink_type="slack",
+        )["attachments"][0]["text"]
+        self.assertIn("*Summary:*", text)
+        self.assertIn("*Configuration data changes*", text)
+        self.assertIn("*Data key:* status", text)
+        self.assertNotIn("**", text)
+        self.assertNotIn("```diff", text)
+        self.assertIn("-before", text)
+        self.assertIn("+after", text)
 
     def test_secret_values_are_redacted(self):
         text = relay.render_alert(
@@ -140,10 +161,10 @@ class RelayProfilesTest(unittest.TestCase):
             previous = relay.SINK_DIRECTORY
             relay.SINK_DIRECTORY = Path(directory)
             try:
-                (Path(directory) / "team-url").write_text("https://mattermost.example/hooks/test")
+                (Path(directory) / "team-url").write_text("https://alerts.example/hooks/test")
                 self.assertEqual(
                     relay.sink_url(CONFIG, "team-alerts"),
-                    "https://mattermost.example/hooks/test",
+                    "https://alerts.example/hooks/test",
                 )
             finally:
                 relay.SINK_DIRECTORY = previous

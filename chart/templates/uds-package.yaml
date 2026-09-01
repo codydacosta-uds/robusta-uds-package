@@ -32,13 +32,13 @@ spec:
           app: robusta-forwarder
         description: "Robusta forwarder Kubernetes API access"
 
-      # The Mattermost relay delivers to an externally hosted webhook.
+      # The alert relay delivers to supported external webhook destinations.
       - direction: Egress
         remoteGenerated: Anywhere
         selector:
-          app.kubernetes.io/name: robusta-mattermost-relay
+          app.kubernetes.io/name: robusta-alert-relay
         port: 443
-        description: "Mattermost webhook delivery"
+        description: "External alert webhook delivery"
 
       # Custom rules for unanticipated scenarios
       {{- with .Values.additionalNetworkAllow }}

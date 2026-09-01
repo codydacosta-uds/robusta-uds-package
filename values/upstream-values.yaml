@@ -15,8 +15,8 @@ enableHolmesGPT: false
 # credentials belong in deployment-time configuration, never this public base file.
 sinksConfig:
   - webhook_sink:
-      name: mattermost-relay
-      url: http://robusta-mattermost-relay.robusta.svc.cluster.local/
+      name: alert-relay
+      url: http://robusta-alert-relay.robusta.svc.cluster.local/
       format: text
       size_limit: 12000
 
@@ -50,6 +50,10 @@ kubewatch:
 
 # CRD permissions are intentionally explicit. Enable only the CRD families used.
 runner:
+  # Robusta loads sink and playbook configuration at process startup. Bump this
+  # package-owned annotation when either contract changes so upgrades roll safely.
+  annotations:
+    uds.dev/alert-config-version: alert-relay-v1
   crdPermissions:
     argo: false
     flux: false
@@ -262,7 +266,7 @@ runner:
 
 # Internal playbooks normalize native Kubernetes updates for the profile-aware
 # relay. Users configure alert profiles and named sinks, not these playbooks.
-x-relay-sink: &relay_sink [mattermost-relay]
+x-relay-sink: &relay_sink [alert-relay]
 x-change-filter: &change_filter
   ignore: [metadata.generation, metadata.resourceVersion, metadata.managedFields, status]
 

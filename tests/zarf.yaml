@@ -5,15 +5,15 @@
 kind: ZarfPackageConfig
 metadata:
   name: robusta-test
-  description: "Test-only Mattermost-compatible receiver for the Robusta package"
+  description: "Test-only incoming webhook receiver for the Robusta package"
   version: "dev"
 
 components:
-  - name: mattermost-test-mock
+  - name: webhook-test-mock
     required: true
     charts:
-      - name: uds-robusta-test-mock
+      - name: uds-robusta-webhook-mock
         namespace: robusta
-        localPath: mattermost-mock-chart
+        localPath: webhook-mock-chart
     images:
       - docker.io/library/python:3.13.2-alpine

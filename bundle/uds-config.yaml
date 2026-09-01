@@ -11,10 +11,15 @@ variables:
     WATCH_SECRETS: "false"
     ALERT_CONFIG: |-
       {
-        "defaultSinks": ["mattermost-default"],
+        "defaultSinks": ["alerts-default", "alerts-slack"],
         "sinks": {
-          "mattermost-default": {
-            "secretKey": "url"
+          "alerts-default": {
+            "type": "mattermost",
+            "secretKey": "alerts-default-url"
+          },
+          "alerts-slack": {
+            "type": "slack",
+            "secretKey": "alerts-slack-url"
           }
         },
         "alertProfiles": [

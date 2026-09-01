@@ -26,10 +26,10 @@ tasks:
             name: robusta-forwarder
             namespace: robusta
             condition: Available
-      - description: Mattermost relay Health Check
+      - description: Alert relay Health Check
         wait:
           cluster:
             kind: Deployment
-            name: robusta-mattermost-relay
+            name: robusta-alert-relay
             namespace: robusta
             condition: Available

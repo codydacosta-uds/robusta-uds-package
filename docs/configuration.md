@@ -1,30 +1,31 @@
 # Alert profile configuration
 
-Robusta `0.48.0` is packaged with a profile-aware Mattermost relay. Users select exact namespaces, native Kubernetes resource types, and named sinks. The package generates and owns the Robusta playbooks; users do not need to write them.
+Robusta `0.48.0` is packaged with a profile-aware webhook alert relay. Users select exact namespaces, native Kubernetes resource types, and named sinks. The package generates and owns the Robusta playbooks; users do not need to write them.
 
 ## Immediate defaults
 
-With a valid `robusta-mattermost-webhook` Secret, the package starts alerting immediately after deployment:
+With a valid `robusta-alert-webhooks` Secret, the package starts alerting immediately after deployment:
 
-- `zarf-namespaced-resources` watches supported namespaced resources in the exact `zarf` namespace and sends yellow Mattermost attachments.
-- `cluster-scoped-resources` watches supported cluster-scoped resources and sends red Mattermost attachments.
-- Both use the named `mattermost-default` sink.
+- `zarf-namespaced-resources` watches supported namespaced resources in the exact `zarf` namespace and sends yellow attachments.
+- `cluster-scoped-resources` watches supported cluster-scoped resources and sends red attachments.
+- Both use the named `alerts-default` webhook destination, whose default type is `mattermost`.
 - Secret observation is supported but remains disabled until explicitly enabled.
 
 The readable default is [`examples/alert-config.yaml`](../examples/alert-config.yaml).
 
 > [!NOTE]
-> `ALERT_CONFIG` is optional. Omit it to use these defaults. An override changes profile selection and sink routing; the package continues to own the normalized native-resource playbooks and Mattermost presentation.
+> `ALERT_CONFIG` is optional. Omit it to use these defaults. An override changes profile selection, sink type, and routing; the package continues to own the normalized native-resource playbooks and presentation.
 
 ## Profile schema
 
 ```yaml
 defaultSinks:                    # Required named-sink fallback
-  - mattermost-default
+  - alerts-default
 
-sinks:                          # Required map of sink name to Secret key
-  mattermost-default:
-    secretKey: url
+sinks:                          # Required map of sink name to type and Secret key
+  alerts-default:
+    type: mattermost             # Optional; mattermost (default) or slack
+    secretKey: alerts-default-url
 
 alertProfiles:                  # Namespaced profiles
   - name: zarf-namespaced-resources
@@ -37,7 +38,7 @@ clusterAlertProfiles:           # Cluster-scoped profiles
   - name: cluster-scoped-resources
     enabled: true
     resources: [ClusterRole, Node]
-    sinks: [mattermost-default] # Optional profile override
+    sinks: [alerts-default]     # Optional profile override
 ```
 
 Validation rejects unknown fields, duplicate or invalid profile names, empty collections, unsupported resource types, invalid exact namespaces, and undefined sink references. Invalid configuration prevents the relay from becoming Ready rather than silently dropping intended alerts.
@@ -49,6 +50,8 @@ Validation rejects unknown fields, duplicate or invalid profile names, empty col
 - Multiple profiles may share a sink.
 - If multiple matching profiles select different sinks, the relay sends once to each unique sink.
 - Sink names never contain webhook URLs. They reference keys in the external Secret.
+- `type` selects `mattermost` or `slack` rendering and defaults to `mattermost` when omitted.
+- Mattermost and Slack sinks can be selected by the same profile; the relay renders each destination independently.
 - Events that do not match an enabled profile are acknowledged and dropped without external delivery.
 
 ## Configure the webhook Secret
@@ -57,20 +60,20 @@ The package never stores webhook URLs. Create the namespace and Secret before de
 
 ```bash
 kubectl create namespace robusta --dry-run=client -o yaml | kubectl apply -f -
-kubectl -n robusta create secret generic robusta-mattermost-webhook \
-  --from-literal=url='https://mattermost.example/hooks/REPLACE_ME'
+kubectl -n robusta create secret generic robusta-alert-webhooks \
+  --from-literal=alerts-default-url='https://mattermost.example/hooks/REPLACE_ME'
 ```
 
 For multiple named sinks, add one key per destination:
 
 ```bash
-kubectl -n robusta create secret generic robusta-mattermost-webhook \
-  --from-literal=url='https://mattermost.example/hooks/DEFAULT' \
-  --from-literal=application-url='https://mattermost.example/hooks/APPLICATION' \
-  --from-literal=security-url='https://mattermost.example/hooks/SECURITY'
+kubectl -n robusta create secret generic robusta-alert-webhooks \
+  --from-literal=alerts-default-url='https://mattermost.example/hooks/DEFAULT' \
+  --from-literal=application-alerts-url='https://hooks.slack.com/services/REPLACE_ME' \
+  --from-literal=security-alerts-url='https://mattermost.example/hooks/SECURITY'
 ```
 
-Then map friendly sink names to those keys, as shown in [`examples/alert-config-multiple-sinks.yaml`](../examples/alert-config-multiple-sinks.yaml).
+Then map logical sink names to those keys, as shown in [`examples/alert-config-multiple-sinks.yaml`](../examples/alert-config-multiple-sinks.yaml).
 
 ## Provide package variables
 
@@ -102,8 +105,8 @@ variables:
     WATCH_SECRETS: "false"
     ALERT_CONFIG: |-
       {
-        "defaultSinks": ["mattermost-default"],
-        "sinks": {"mattermost-default": {"secretKey": "url"}},
+        "defaultSinks": ["alerts-default"],
+        "sinks": {"alerts-default": {"type": "mattermost", "secretKey": "alerts-default-url"}},
         "alertProfiles": [
           {
             "name": "application-resources",
@@ -168,7 +171,7 @@ Namespace matching is exact. A profile for `application` does not match `applica
 - `Node`
 - `PersistentVolume`
 
-Every resource uses the same bounded Mattermost attachment layout with environment, namespace or `cluster-scoped`, resource, kind, scope, severity, matching profile, a resource-aware change section, and Robusta footer.
+Every resource uses the same bounded attachment content—environment, namespace or `cluster-scoped`, resource, kind, scope, severity, matching profile, a resource-aware change section, and Robusta footer—with destination-specific markup.
 
 ## Secret alerts
 
@@ -195,4 +198,4 @@ The generated native-resource playbooks are package internals. Advanced maintain
 
 ## Test support package
 
-The isolated package in `tests/zarf.yaml` includes an in-cluster Mattermost-compatible receiver and a test-only webhook Secret. CI deploys it alongside the normal upstream Robusta package, changes a ConfigMap in the default `zarf` profile, and verifies a Mattermost attachment titled `ConfigMap changed`.
+The isolated package in `tests/zarf.yaml` includes an in-cluster webhook receiver and a test-only webhook Secret. CI deploys it alongside the normal upstream Robusta package, changes a ConfigMap in the default `zarf` profile, and verifies independently rendered Mattermost and Slack attachments titled `ConfigMap changed`.

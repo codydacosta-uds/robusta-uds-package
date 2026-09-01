@@ -12,7 +12,7 @@ from urllib.request import Request, urlopen
 
 ENVIRONMENT = os.environ.get("ALERT_ENVIRONMENT", "production")
 CONFIG_PATH = Path(os.environ.get("ALERT_CONFIG_PATH", "/app/profiles.json"))
-SINK_DIRECTORY = Path(os.environ.get("SINK_DIRECTORY", "/etc/robusta-webhooks"))
+SINK_DIRECTORY = Path(os.environ.get("SINK_DIRECTORY", "/etc/robusta-alert-webhooks"))
 YELLOW = "#f2c744"
 RED = "#d24b4b"
 
@@ -78,8 +78,12 @@ def validate_config(config):
     for name, definition in sinks.items():
         if not CONFIG_NAME.fullmatch(name) or not isinstance(definition, dict):
             raise ValueError(f"invalid sink definition: {name}")
-        if set(definition) != {"secretKey"} or not CONFIG_NAME.fullmatch(str(definition.get("secretKey", ""))):
-            raise ValueError(f"sink {name} must contain only a valid secretKey")
+        allowed_sink = {"secretKey", "type"}
+        extra = sorted(set(definition) - allowed_sink)
+        if extra or not CONFIG_NAME.fullmatch(str(definition.get("secretKey", ""))):
+            raise ValueError(f"sink {name} must contain a valid secretKey and optional type")
+        if definition.get("type", "mattermost") not in {"mattermost", "slack"}:
+            raise ValueError(f"sink {name} type must be mattermost or slack")
 
     _validate_names(config.get("defaultSinks"), "defaultSinks", sinks)
     seen = set()
@@ -192,20 +196,24 @@ def section_title(kind):
     return "Manifest changes"
 
 
-def render_alert(message, color=YELLOW, profiles=None):
+def render_alert(message, color=YELLOW, profiles=None, sink_type="mattermost"):
     lines = message.splitlines()
     incoming_title = lines[0] if lines else "Kubernetes configuration changed"
     kind, namespace, name = parse_title(incoming_title)
     raw_title = f"{kind} changed: {namespace}/{name}"
     pattern = re.compile(r"(?ms)^\s*\*([^*]+)\*:\s*(.*?)\s*==>\s*(.*?)(?=\n\s*\*[^*]+\*:\s*|\Z)")
     changes = [(m.group(1).strip(), m.group(2).strip(), m.group(3).strip()) for m in pattern.finditer(message)]
+    if sink_type not in {"mattermost", "slack"}:
+        raise ValueError(f"unsupported sink type: {sink_type}")
+    bold = (lambda value: f"*{value}*") if sink_type == "slack" else (lambda value: f"**{value}**")
+    code_fence = "```" if sink_type == "slack" else "```diff"
     rendered_changes = []
     for path, before, after in changes:
         label, shown_path = field_profile(kind, path)
         if kind == "Secret" and path.lower().startswith(("data.", "stringdata.")):
-            rendered_changes.append(f"**{label}:** {shown_path}\n_Value changed (redacted)._")
+            rendered_changes.append(f"{bold(f'{label}:')} {shown_path}\n_Value changed (redacted)._")
         else:
-            rendered_changes.append(f"**{label}:** {shown_path}\n```diff\n{value_diff(before, after)}\n```")
+            rendered_changes.append(f"{bold(f'{label}:')} {shown_path}\n{code_fence}\n{value_diff(before, after)}\n```")
     if rendered_changes:
         change_text = "\n\n".join(rendered_changes)
         summary = f"{len(changes)} manifest {'change' if len(changes) == 1 else 'changes'}"
@@ -224,7 +232,7 @@ def render_alert(message, color=YELLOW, profiles=None):
         fields.append({"title": "Alert profile", "value": ", ".join(profiles), "short": False})
     return {"attachments": [{
         "fallback": raw_title, "color": color, "title": f"⚠️ {raw_title}",
-        "text": f"**Summary:** {summary}\n\n**{section_title(kind)}**\n\n{change_text[:9000]}\n\n_Actor and API request: EKS audit logs_",
+        "text": f"{bold('Summary:')} {summary}\n\n{bold(section_title(kind))}\n\n{change_text[:9000]}",
         "fields": fields, "footer": "Robusta",
     }]}
 
@@ -257,8 +265,9 @@ class Relay(BaseHTTPRequestHandler):
                 self.send_response(204)
                 self.end_headers()
                 return
-            alert = render_alert(message, RED if cluster_scoped else YELLOW, profiles)
             for sink in sinks:
+                sink_type = config["sinks"][sink].get("type", "mattermost")
+                alert = render_alert(message, RED if cluster_scoped else YELLOW, profiles, sink_type)
                 request = Request(sink_url(config, sink), data=json.dumps(alert).encode(), headers={"Content-Type": "application/json"})
                 with urlopen(request, timeout=10) as response:
                     if not 200 <= response.status < 300:
@@ -266,7 +275,7 @@ class Relay(BaseHTTPRequestHandler):
                 print(f"Delivered [{sink}]: {alert['attachments'][0]['fallback']}", flush=True)
             self.send_response(204)
         except Exception as error:
-            print(f"Mattermost delivery failed: {error}", flush=True)
+            print(f"Alert delivery failed: {error}", flush=True)
             self.send_response(502)
         self.end_headers()
 

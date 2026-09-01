@@ -2,29 +2,32 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later OR LicenseRef-Defense-Unicorns-Commercial
 
 defaultSinks:
-  - mattermost-default
+  - alerts-default
 
 sinks:
-  mattermost-default:
-    secretKey: url
+  alerts-default:
+    type: mattermost
+    secretKey: alerts-default-url
   application-alerts:
-    secretKey: application-url
+    type: slack
+    secretKey: application-alerts-url
   security-alerts:
-    secretKey: security-url
+    type: mattermost
+    secretKey: security-alerts-url
 
 alertProfiles:
-  # Uses mattermost-default because sinks is omitted.
+  # Uses alerts-default because sinks is omitted.
   - name: zarf-namespaced-resources
     namespaces: [zarf]
     resources: [ConfigMap, Deployment, Service]
 
-  # One resource policy shared by two exact namespaces and routed elsewhere.
+  # One resource policy shared by two exact namespaces and routed to Slack.
   - name: application-team-resources
     namespaces: [application-one, application-two]
     resources: [ConfigMap, Deployment, Ingress, Service, StatefulSet]
     sinks: [application-alerts]
 
-  # Profiles can send the same alert to multiple named sinks.
+  # Profiles can send the same alert to multiple platform-specific sinks.
   - name: payments-security-resources
     namespaces: [payments]
     resources: [Deployment, Ingress, Secret, ServiceAccount]
